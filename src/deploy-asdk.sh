@@ -223,7 +223,24 @@ deploy_module() {
 
     log "[$name] Running ./run.sh (runs deployment inside the container)…"
     log "[$name] NOTE: this stage is interactive — follow on-screen Azure/B2C prompts."
-    ./run.sh || { err "[$name] run.sh failed"; exit 1; }
+
+    # Capture output while preserving the interactive TTY (tee doesn't touch stdin).
+    run_log="$(mktemp 2>/dev/null)" || run_log="/tmp/asdk-${name}-run.log"
+    ./run.sh 2>&1 | tee "$run_log"
+    rc=${PIPESTATUS[0]}
+    if (( rc != 0 )); then err "[$name] run.sh failed (exit $rc)"; rm -f "$run_log"; exit 1; fi
+
+    # Guard: the kit's run.sh exits 0 even when it only printed "fill in your
+    # config and run again" without deploying anything. Treat that as a failure
+    # so we don't cascade into the next module with empty/null outputs.
+    if grep -qiE 'add required initial settings|run this script again' "$run_log"; then
+      rm -f "$run_log"
+      err "[$name] run.sh exited 0 but reported INCOMPLETE configuration — nothing was deployed."
+      err "[$name] Fill in the required fields in '$dir/config/config.json' (the initConfig object),"
+      err "[$name] then resume with: $0 --from $name"
+      exit 1
+    fi
+    rm -f "$run_log"
   ) || die "Module '$name' failed. Fix the error above, then resume with: $0 --from $name"
 
   ok "[$name] module finished."

@@ -1,8 +1,8 @@
 { 
   "initConfig": {
-    "userPrincipalId": "",
-    "subscriptionId": "",
-    "tenantId": "",
+    "userPrincipalId": "f65568b4-a7cb-4cfc-9e2e-e6078aa4cc29",
+    "subscriptionId": "a353af1c-9dd6-4de9-af57-3bae4b638eee",
+    "tenantId": "e77b3a11-2e95-4f9e-973b-918d466ba68d",
     "location": "",
     "naming": {
       "solutionPrefix": "asdk",
