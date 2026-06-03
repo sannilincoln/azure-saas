@@ -1,7 +1,9 @@
-﻿using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Identity.Web;
+using Saas.Identity.Claims;
 using Saas.Shared.Options;
 
 namespace Saas.Identity.Extensions;
@@ -12,10 +14,15 @@ public static partial class SaasIdentityConfigurationBuilderExtensions
         string configSectionName,
         ConfigurationManager configuration,
         IEnumerable<string> scopes)
-    {        
+    {
         // Registerer scopes to the Options collection
-        services.Configure<SaasAppScopeOptions>(saasAppScopeOptions => 
+        services.Configure<SaasAppScopeOptions>(saasAppScopeOptions =>
             saasAppScopeOptions.Scopes = scopes.ToArray());
+
+        // Entra External ID: map the 'oid' claim into NameIdentifier (B2C used to put
+        // the object-id GUID in 'sub'/NameIdentifier; External ID does not). See
+        // NameIdentifierClaimsTransformation.
+        services.AddScoped<IClaimsTransformation, NameIdentifierClaimsTransformation>();
 
 
         var authenticationBuilder = services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
