@@ -103,7 +103,8 @@ var appConfigStore = {
       value: signedOutCallBackPath
       isSecret: false
       contentType: 'text/plain'
-    }    {
+    }
+    {
       key: '${claimToRoleTransformerKeyName}:AuthenticationType'
       value: authenticationType
       isSecret: false
