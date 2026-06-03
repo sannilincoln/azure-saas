@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.Logging;
 
 namespace Saas.Identity.Claims;
 
@@ -21,8 +22,17 @@ namespace Saas.Identity.Claims;
 /// </summary>
 public class NameIdentifierClaimsTransformation : IClaimsTransformation
 {
-    private const string ObjectIdUri = "http://schemas.microsoft.com/identity/claims/objectidentifier";
-    private const string ObjectIdShort = "oid";
+    // Object id ('oid') under both the short JWT name and the mapped legacy URI.
+    private static readonly string[] ObjectIdClaimTypes =
+    {
+        "http://schemas.microsoft.com/identity/claims/objectidentifier",
+        "oid",
+    };
+
+    private readonly ILogger<NameIdentifierClaimsTransformation> _logger;
+
+    public NameIdentifierClaimsTransformation(ILogger<NameIdentifierClaimsTransformation> logger)
+        => _logger = logger;
 
     public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
@@ -39,18 +49,29 @@ public class NameIdentifierClaimsTransformation : IClaimsTransformation
             return Task.FromResult(principal);
         }
 
-        var objectId = identity.FindFirst(ObjectIdUri)?.Value
-                       ?? identity.FindFirst(ObjectIdShort)?.Value;
+        var objectId = ObjectIdClaimTypes
+            .Select(t => identity.FindFirst(t)?.Value)
+            .FirstOrDefault(v => Guid.TryParse(v, out _));
 
-        if (Guid.TryParse(objectId, out _))
+        if (objectId is not null)
         {
-            // Replace the non-GUID NameIdentifier (the pairwise 'sub') with the object id.
             var existing = identity.FindFirst(ClaimTypes.NameIdentifier);
             if (existing is not null)
             {
                 identity.RemoveClaim(existing);
             }
             identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, objectId));
+            _logger.LogInformation("NameIdentifier mapped from object id claim.");
+        }
+        else
+        {
+            // TEMP DIAGNOSTIC: NameIdentifier is not a GUID and no usable 'oid' was found.
+            // Log every claim type present so we can see what the External ID token carries.
+            _logger.LogWarning(
+                "NameIdentifier unresolved. IsAuthenticated={Auth}; current NameIdentifier='{Nid}'; claim types present: [{Types}]",
+                identity.IsAuthenticated,
+                nameIdentifier ?? "<null>",
+                string.Join(", ", identity.Claims.Select(c => c.Type)));
         }
 
         return Task.FromResult(principal);
