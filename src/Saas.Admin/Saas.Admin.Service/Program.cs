@@ -1,8 +1,10 @@
 using Azure.Identity;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Configuration.AzureAppConfiguration;
 using Microsoft.Extensions.Options;
 using Saas.Admin.Service.Data;
 using Saas.Identity.Authorization.Handler;
+using Saas.Identity.Claims;
 using Saas.Identity.Authorization.Option;
 using Saas.Identity.Authorization.Provider;
 using Saas.Permissions.Client;
@@ -63,6 +65,11 @@ builder.Services.AddHttpContextAccessor();
 
 // Add authentication for incoming requests
 builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration, AzureB2CAdminApiOptions.SectionName);
+
+// Entra External ID: map the 'oid' claim into NameIdentifier so the authorization
+// handlers (which read ClaimTypes.NameIdentifier as a GUID) keep working. See
+// NameIdentifierClaimsTransformation.
+builder.Services.AddScoped<IClaimsTransformation, NameIdentifierClaimsTransformation>();
 
 // Register authorization handlers for authorization
 builder.Services.AddSingleton<IAuthorizationHandler, SaasTenantPermissionAuthorizationHandler>();
