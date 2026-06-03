@@ -19,9 +19,6 @@ param azureAdB2CInstanceURL string
 @description('The Azure B2C Signed Out Call Back Path.')
 param signedOutCallBackPath string
 
-@description('The Azure B2C Sign up/in Policy Id.')
-param signUpSignInPolicyId string
-
 @description('The Azure B2C Permissions API base Url.')
 param baseUrl string
 
@@ -107,14 +104,7 @@ var appConfigStore = {
       value: signedOutCallBackPath
       isSecret: false
       contentType: 'text/plain'
-    }
-    {
-      key: '${permissionsApiKeyName}:${azureB2CKeyName}:SignUpSignInPolicyId'
-      value: signUpSignInPolicyId
-      isSecret: false
-      contentType: 'text/plain'
-    }
-  ]
+    }  ]
 }
 
 // Adding App Configuration entries

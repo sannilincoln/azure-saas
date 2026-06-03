@@ -217,35 +217,25 @@ put-value ".deployment.keyVault.provisionState" "provioning"
             exit 1
     )
 
-echo "Provisioning Azure B2C..." |
+echo "Configuring Microsoft Entra External ID..." |
     log-output \
         --level info \
-        --header "Azure B2C Tenant"
+        --header "Entra External ID"
 
 put-value ".deployment.azureb2c.provisionState" "provisioning"
-# Creating Azure AD B2C Directory if it does not already exist
+# Azure AD B2C is end-of-sale for new subscriptions (2025-05-01). Instead of creating a
+# B2C tenant + app registrations + custom (IEF) policies, we consume a pre-created
+# Entra External ID tenant and its manually-registered apps. configure-external-id.sh
+# writes the identity settings the rest of the deployment reads and stores the client
+# secrets in Key Vault. (Replaces create-azure-b2c.sh, config-b2c.sh, upload-ief-policies.sh.)
 (
-    "${SCRIPT_DIR}/create-azure-b2c.sh"
-    put-value ".deployment.azureb2c.provisionState" "successful"
-) ||
-    (
-        put-value ".deployment.azureb2c.provisionState" "failed" &&
-            echo "Creation of Azure B2C tenant failed." |
-            log-output \
-                --level error \
-                --header "Critical error" ||
-            exit 1
-    )
-
-put-value ".deployment.azureb2c.configuration.provisionState" "provisioning"
-# Configuring Azure the AD B2C Tenant
-(
-    "${SCRIPT_DIR}/config-b2c.sh" &&
+    "${SCRIPT_DIR}/configure-external-id.sh" &&
+        put-value ".deployment.azureb2c.provisionState" "successful" &&
         put-value ".deployment.azureb2c.configuration.provisionState" "successful"
 ) ||
     (
-        put-value ".deployment.azureb2c.configuration.provisionState" "failed" &&
-            echo "Configuration of Azure B2C tenant failed." |
+        put-value ".deployment.azureb2c.provisionState" "failed" &&
+            echo "Configuration of Entra External ID failed." |
             log-output \
                 --level error \
                 --header "Critical error" ||
@@ -267,20 +257,8 @@ put-value ".deployment.identityFoundation.provisionState" "provisioning"
             exit 1
     )
 
-put-value ".deployment.iefPolicies.provisionState" "provisioning"
-# Uploading IEF custom policies
-(
-    "${SCRIPT_DIR}/upload-ief-policies.sh" &&
-        put-value ".deployment.iefPolicies.provisionState" "successful"
-) ||
-    (
-        put-value ".deployment.iefPolicies.provisionState" "failed" &&
-            echo "Upload of IEF policies failed." |
-            log-output \
-                --level error \
-                --header "Critical error" ||
-            exit 1
-    )
+# NOTE: Custom (IEF) policy upload removed — Entra External ID does not support B2C
+# custom policies. Sign-in uses an Entra External ID user flow configured in the portal.
 
 # Adding OIDC Workflow for GitHub Actions
 put-value ".deployment.oidc.provisionState" "provisioning"

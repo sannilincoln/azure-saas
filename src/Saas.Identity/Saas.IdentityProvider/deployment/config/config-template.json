@@ -3,7 +3,7 @@
     "userPrincipalId": "f65568b4-a7cb-4cfc-9e2e-e6078aa4cc29",
     "subscriptionId": "a353af1c-9dd6-4de9-af57-3bae4b638eee",
     "tenantId": "e77b3a11-2e95-4f9e-973b-918d466ba68d",
-    "location": "",
+    "location": "eastus",
     "naming": {
       "solutionPrefix": "asdk",
       "solutionName": "test"
@@ -13,6 +13,17 @@
       "countryCode": "DK",
       "skuName": "PremiumP1",
       "tier": "A0"
+    },
+    "entraExternalId": {
+      "_comment": "Microsoft Entra External ID inputs. The tenant + app registrations are created MANUALLY in the portal (B2C is end-of-sale for new subscriptions). Client SECRETS go in the gitignored config/external-id.secrets.json, never here.",
+      "tenantId": "",
+      "tenantDomain": "",
+      "apps": {
+        "admin-api": "",
+        "permissions-api": "",
+        "signupadmin-app": "",
+        "saas-app": ""
+      }
     }
   },
   "version": "0.8.0",

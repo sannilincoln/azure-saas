@@ -90,7 +90,6 @@ def patch_paramenters_file(
     parameters['parameters'].update(get_deploy_b2c_value(config, 'instance', 'azureAdB2CInstanceURL'))
     
     parameters['parameters'].update(get_b2c_value(config, 'signedOutCallBackPath', 'signedOutCallBackPath'))
-    parameters['parameters'].update(get_b2c_value(config, 'signUpSignInPolicyId', 'signUpSignInPolicyId'))
 
     parameters['parameters'].update(get_app_value(config, app_name, 'appId', 'clientId'))
     parameters['parameters'].update(get_app_value(config, app_name, 'certificateKeyName', 'certificateKeyName'))
