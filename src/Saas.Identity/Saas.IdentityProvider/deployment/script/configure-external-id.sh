@@ -139,10 +139,12 @@ while IFS= read -r app_name; do
         continue
     fi
 
+    # Use --value=... (not space-separated) so secrets beginning with '-' are not
+    # mis-parsed by the az CLI as an option.
     az keyvault secret set \
         --name "${app_name}" \
         --vault-name "${key_vault_name}" \
-        --value "${secret}" \
+        --value="${secret}" \
         --only-show-errors >/dev/null ||
         { echo "Failed to set Key Vault secret for '${app_name}'." |
             log-output --level error --header "Critical Error"; exit 1; }
