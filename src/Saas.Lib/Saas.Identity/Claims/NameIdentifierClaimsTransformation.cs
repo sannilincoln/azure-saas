@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.Extensions.Logging;
 
 namespace Saas.Identity.Claims;
 
@@ -16,9 +15,10 @@ namespace Saas.Identity.Claims;
 /// (NOT a GUID); the directory object id lives in the <c>oid</c> claim. Left unmapped,
 /// every NameIdentifier read throws (ArgumentNullException: NameIdentifier).
 ///
-/// This transformation makes External ID behave like B2C did: if NameIdentifier is
-/// missing or not a GUID, it is replaced with the value of the <c>oid</c> claim.
-/// Idempotent and safe to run on every request.
+/// <see cref="TryMapObjectIdToNameIdentifier"/> replaces a missing/non-GUID
+/// NameIdentifier with the <c>oid</c> value. It is used from the OIDC OnTokenValidated
+/// event (web apps — runs on the sign-in principal and is baked into the auth cookie)
+/// and as an <see cref="IClaimsTransformation"/> (APIs validating bearer tokens).
 /// </summary>
 public class NameIdentifierClaimsTransformation : IClaimsTransformation
 {
@@ -29,49 +29,42 @@ public class NameIdentifierClaimsTransformation : IClaimsTransformation
         "oid",
     };
 
-    private readonly ILogger<NameIdentifierClaimsTransformation> _logger;
-
-    public NameIdentifierClaimsTransformation(ILogger<NameIdentifierClaimsTransformation> logger)
-        => _logger = logger;
-
-    public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
+    /// <summary>
+    /// Ensures <see cref="ClaimTypes.NameIdentifier"/> holds the directory object-id GUID.
+    /// Returns true if a mapping was applied (or already valid), false if no usable
+    /// object id was found. Idempotent.
+    /// </summary>
+    public static bool TryMapObjectIdToNameIdentifier(ClaimsIdentity identity)
     {
-        if (principal.Identity is not ClaimsIdentity identity || !identity.IsAuthenticated)
-        {
-            return Task.FromResult(principal);
-        }
-
         var nameIdentifier = identity.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-        // Already a GUID (e.g. legacy B2C tokens) — nothing to do.
         if (Guid.TryParse(nameIdentifier, out _))
         {
-            return Task.FromResult(principal);
+            return true; // already a GUID (e.g. legacy B2C tokens)
         }
 
         var objectId = ObjectIdClaimTypes
             .Select(t => identity.FindFirst(t)?.Value)
             .FirstOrDefault(v => Guid.TryParse(v, out _));
 
-        if (objectId is not null)
+        if (objectId is null)
         {
-            var existing = identity.FindFirst(ClaimTypes.NameIdentifier);
-            if (existing is not null)
-            {
-                identity.RemoveClaim(existing);
-            }
-            identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, objectId));
-            _logger.LogInformation("NameIdentifier mapped from object id claim.");
+            return false;
         }
-        else
+
+        var existing = identity.FindFirst(ClaimTypes.NameIdentifier);
+        if (existing is not null)
         {
-            // TEMP DIAGNOSTIC: NameIdentifier is not a GUID and no usable 'oid' was found.
-            // Log every claim type present so we can see what the External ID token carries.
-            _logger.LogWarning(
-                "NameIdentifier unresolved. IsAuthenticated={Auth}; current NameIdentifier='{Nid}'; claim types present: [{Types}]",
-                identity.IsAuthenticated,
-                nameIdentifier ?? "<null>",
-                string.Join(", ", identity.Claims.Select(c => c.Type)));
+            identity.RemoveClaim(existing);
+        }
+        identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, objectId));
+        return true;
+    }
+
+    public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
+    {
+        if (principal.Identity is ClaimsIdentity { IsAuthenticated: true } identity)
+        {
+            TryMapObjectIdToNameIdentifier(identity);
         }
 
         return Task.FromResult(principal);
