@@ -15,6 +15,19 @@ The Azure SaaS Development Kit (ASDK) provide a cloud native starting point buil
 If you run into any challenges or have questions, please use Discussions and/or open an issue on this repo. 
 Oh, and don't forget to give the repo a star ⭐ if you like what you see. Thank you.
 
+> **This fork uses Microsoft Entra External ID, not Azure AD B2C.** Azure AD B2C is
+> end-of-sale for new customers (2025-05-01), so this fork has been migrated to Entra
+> External ID. Use the guides below rather than the upstream B2C quick start:
+>
+> - **[DEPLOYMENT.md](./DEPLOYMENT.md)** — full end-to-end deploy & hosting guide
+>   (prerequisites, WSL setup, External ID tenant + app registrations, running the
+>   deployment, GitHub Actions code deploy, verification, troubleshooting).
+> - **[LOCAL-DEVELOPMENT.md](./LOCAL-DEVELOPMENT.md)** — run the apps locally against a
+>   deployed backend.
+>
+> Helper scripts: `src/setup-wsl-toolchain.sh` (provision the WSL toolchain) and
+> `src/deploy-asdk.sh` (sequential deployment orchestrator).
+
 ## Overview
 
 The [Azure SaaS Development Kit (ASDK)](https://azure.microsoft.com/en-us/resources/development-kit/saas/) is a solid starting point for building [cloud-native](https://learn.microsoft.com/en-us/dotnet/architecture/cloud-native/definition) Software as a Service (SaaS) solutions, offering a reference architecture based on best practices and design patterns as outlined in the Azure Architecture Center: [Architecting multitenant solutions on Azure - Azure Architecture Center | Microsoft Learn](https://learn.microsoft.com/en-us/azure/architecture/guide/multitenant/overview)
