@@ -23,9 +23,27 @@ public class ApplicationUser : ClaimsIdentity, IApplicationUser
     {
         get
         {
-            var claim = Identity?.FindFirst(SR.NameIdentifierClaimType);
+            var identity = Identity;
 
-            return (Guid.TryParse(claim?.Value, out Guid nameIdentifier)) ? nameIdentifier : throw new ArgumentNullException("NameIdentifier");
+            // B2C put the object-id GUID in 'sub'/NameIdentifier. Entra External ID's
+            // NameIdentifier ('sub') is an opaque pairwise id; the object-id GUID is in 'oid'.
+            var value = identity?.FindFirst(SR.NameIdentifierClaimType)?.Value;
+            if (!Guid.TryParse(value, out Guid nameIdentifier))
+            {
+                value = identity?.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier")?.Value
+                        ?? identity?.FindFirst("oid")?.Value;
+            }
+
+            if (Guid.TryParse(value, out nameIdentifier))
+            {
+                return nameIdentifier;
+            }
+
+            var claimTypes = identity is null
+                ? "<no identity>"
+                : string.Join(", ", identity.Claims.Select(c => c.Type));
+            throw new ArgumentNullException(nameof(NameIdentifier),
+                $"No GUID name identifier (NameIdentifier/oid). Claim types present: [{claimTypes}]");
         }
     }
 
