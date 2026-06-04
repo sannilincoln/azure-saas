@@ -1,7 +1,9 @@
-﻿using Microsoft.AspNetCore.Authentication;
+﻿using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Identity.Web;
 using Saas.Identity.Claims;
 using Saas.Shared.Options;
@@ -20,16 +22,43 @@ public static partial class SaasIdentityConfigurationBuilderExtensions
             saasAppScopeOptions.Scopes = scopes.ToArray());
 
         // Entra External ID: map the 'oid' claim into NameIdentifier (B2C used to put
-        // the object-id GUID in 'sub'/NameIdentifier; External ID does not). See
+        // the object-id GUID in 'sub'/NameIdentifier; External ID does not). Also kept
+        // as an IClaimsTransformation for the bearer-token (API) path. See
         // NameIdentifierClaimsTransformation.
         services.AddScoped<IClaimsTransformation, NameIdentifierClaimsTransformation>();
-
 
         var authenticationBuilder = services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
             .AddMicrosoftIdentityWebApp(options =>
             {
                 configuration.Bind(configSectionName, options);
-            });     
+            });
+
+        // For the interactive web-app sign-in, the cookie/OIDC scheme means an
+        // IClaimsTransformation doesn't reliably see the signed-in principal. Map
+        // 'oid' -> NameIdentifier at token validation instead, so it is persisted into
+        // the auth cookie. PostConfigure runs after Microsoft.Identity.Web wires its own
+        // events, so we chain rather than replace OnTokenValidated.
+        services.PostConfigure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options =>
+        {
+            var previous = options.Events.OnTokenValidated;
+            options.Events.OnTokenValidated = async context =>
+            {
+                if (previous is not null)
+                {
+                    await previous(context);
+                }
+
+                if (context.Principal?.Identity is ClaimsIdentity identity
+                    && !NameIdentifierClaimsTransformation.TryMapObjectIdToNameIdentifier(identity))
+                {
+                    context.HttpContext.RequestServices
+                        .GetService<ILoggerFactory>()?
+                        .CreateLogger("NameIdentifierMapping")
+                        .LogWarning("OnTokenValidated: object id not found; claim types: [{Types}]",
+                            string.Join(", ", identity.Claims.Select(c => c.Type)));
+                }
+            };
+        });
 
         return new SaasWebAppClientCredentialBuilder(authenticationBuilder, scopes);
     }
