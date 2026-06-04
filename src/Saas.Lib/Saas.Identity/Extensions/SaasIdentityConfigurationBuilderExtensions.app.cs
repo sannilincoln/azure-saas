@@ -48,14 +48,22 @@ public static partial class SaasIdentityConfigurationBuilderExtensions
                     await previous(context);
                 }
 
-                if (context.Principal?.Identity is ClaimsIdentity identity
-                    && !NameIdentifierClaimsTransformation.TryMapObjectIdToNameIdentifier(identity))
+                var logger = context.HttpContext.RequestServices
+                    .GetService<ILoggerFactory>()?.CreateLogger("NameIdentifierMapping");
+
+                if (context.Principal?.Identity is ClaimsIdentity identity)
                 {
-                    context.HttpContext.RequestServices
-                        .GetService<ILoggerFactory>()?
-                        .CreateLogger("NameIdentifierMapping")
-                        .LogWarning("OnTokenValidated: object id not found; claim types: [{Types}]",
-                            string.Join(", ", identity.Claims.Select(c => c.Type)));
+                    var mapped = NameIdentifierClaimsTransformation.TryMapObjectIdToNameIdentifier(identity);
+                    // TEMP DIAGNOSTIC (Warning so it surfaces at default log levels):
+                    // confirm the event fires, whether it mapped, and what the token carries.
+                    logger?.LogWarning(
+                        "OnTokenValidated fired. mapped={Mapped}. claim types: [{Types}]",
+                        mapped,
+                        string.Join(", ", identity.Claims.Select(c => c.Type)));
+                }
+                else
+                {
+                    logger?.LogWarning("OnTokenValidated fired but Principal/Identity was null.");
                 }
             };
         });
