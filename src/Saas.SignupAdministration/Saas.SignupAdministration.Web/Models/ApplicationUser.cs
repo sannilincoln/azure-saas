@@ -12,10 +12,30 @@ public class ApplicationUser : ClaimsIdentity, IApplicationUser
     {
         get
         {
-            var claim = Identity?.FindFirst(SR.EmailAddressClaimType);
-            string emailAddress = claim?.Value ?? string.Empty;
+            // B2C emitted the email in the SOAP 'emailaddress' claim. Entra External ID
+            // does not; it carries the sign-in email in 'preferred_username' (and sometimes
+            // 'email'/'emails'). Try the B2C claim first, then fall back.
+            var identity = Identity;
+            var emailAddress = identity?.FindFirst(SR.EmailAddressClaimType)?.Value;
+            if (string.IsNullOrWhiteSpace(emailAddress) || !RegexUtilities.IsValidEmail(emailAddress))
+            {
+                emailAddress = new[] { "preferred_username", "email", "emails" }
+                    .Select(claimType => identity?.FindFirst(claimType)?.Value)
+                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value) && RegexUtilities.IsValidEmail(value))
+                    ?? emailAddress;
+            }
 
-            return (!string.IsNullOrWhiteSpace(emailAddress) || RegexUtilities.IsValidEmail(emailAddress)) ? emailAddress : (emailAddress == null) ? throw new ArgumentNullException("EmailAddress") : throw new ArgumentException("The email addres must be in a valid format", "EmailAddress");
+            if (!string.IsNullOrWhiteSpace(emailAddress) && RegexUtilities.IsValidEmail(emailAddress))
+            {
+                return emailAddress;
+            }
+
+            var claimTypes = identity is null
+                ? "<no identity>"
+                : string.Join(", ", identity.Claims.Select(c => c.Type));
+            throw new ArgumentException(
+                $"No valid email claim (emailaddress/preferred_username/email). Claim types present: [{claimTypes}]",
+                nameof(EmailAddress));
         }
     }
 

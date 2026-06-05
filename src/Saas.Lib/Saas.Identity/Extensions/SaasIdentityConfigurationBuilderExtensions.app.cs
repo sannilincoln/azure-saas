@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Identity.Web;
 using Saas.Identity.Claims;
 using Saas.Shared.Options;
@@ -33,11 +32,10 @@ public static partial class SaasIdentityConfigurationBuilderExtensions
                 configuration.Bind(configSectionName, options);
             });
 
-        // For the interactive web-app sign-in, the cookie/OIDC scheme means an
-        // IClaimsTransformation doesn't reliably see the signed-in principal. Map
-        // 'oid' -> NameIdentifier at token validation instead, so it is persisted into
-        // the auth cookie. PostConfigure runs after Microsoft.Identity.Web wires its own
-        // events, so we chain rather than replace OnTokenValidated.
+        // For the interactive web-app sign-in, map 'oid' -> NameIdentifier at token
+        // validation so the object-id GUID is persisted into the auth cookie. PostConfigure
+        // runs after Microsoft.Identity.Web wires its own events, so we chain rather than
+        // replace OnTokenValidated.
         services.PostConfigure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options =>
         {
             var previous = options.Events.OnTokenValidated;
@@ -48,22 +46,9 @@ public static partial class SaasIdentityConfigurationBuilderExtensions
                     await previous(context);
                 }
 
-                var logger = context.HttpContext.RequestServices
-                    .GetService<ILoggerFactory>()?.CreateLogger("NameIdentifierMapping");
-
                 if (context.Principal?.Identity is ClaimsIdentity identity)
                 {
-                    var mapped = NameIdentifierClaimsTransformation.TryMapObjectIdToNameIdentifier(identity);
-                    // TEMP DIAGNOSTIC (Warning so it surfaces at default log levels):
-                    // confirm the event fires, whether it mapped, and what the token carries.
-                    logger?.LogWarning(
-                        "OnTokenValidated fired. mapped={Mapped}. claim types: [{Types}]",
-                        mapped,
-                        string.Join(", ", identity.Claims.Select(c => c.Type)));
-                }
-                else
-                {
-                    logger?.LogWarning("OnTokenValidated fired but Principal/Identity was null.");
+                    NameIdentifierClaimsTransformation.TryMapObjectIdToNameIdentifier(identity);
                 }
             };
         });

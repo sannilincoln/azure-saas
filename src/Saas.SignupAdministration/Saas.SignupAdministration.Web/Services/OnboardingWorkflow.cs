@@ -44,6 +44,17 @@ public class OnboardingWorkflowService
 
     public async Task OnboardTenant()
     {
+        // Guard against a lost/expired session producing a blank tenant (which then collides
+        // on the unique route index and surfaces as an opaque 500 from the Admin API).
+        if (string.IsNullOrWhiteSpace(OnboardingWorkflowItem.OrganizationName)
+            || string.IsNullOrWhiteSpace(OnboardingWorkflowItem.TenantRouteName))
+        {
+            throw new InvalidOperationException(
+                "Onboarding data was lost before submission (organization name / route are empty). " +
+                "This usually means the session expired or the web app was restarted mid-wizard. " +
+                "Please restart the onboarding from the beginning.");
+        }
+
         NewTenantRequest tenantRequest = new()
         {
             Name = OnboardingWorkflowItem.OrganizationName,
