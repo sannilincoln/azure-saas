@@ -32,10 +32,13 @@ public class IndexModel : PageModel
             {
                 tenantData = await _tenantService.GetTenantInfoByRouteAsync(activeRoute);
             }
-            catch
+            catch (Exception ex)
             {
-
-            }            
+                // Tenant info stays null (rendered as "Unknown"). Don't fail the page, but do
+                // log: a 404 here usually means the caller lacks Read permission on the tenant
+                // (i.e. the Admin API found no matching 'permissions' claim for this user).
+                _logger.LogWarning(ex, "Could not fetch tenant info for route '{Route}'.", activeRoute);
+            }
         }
 
         return Page();

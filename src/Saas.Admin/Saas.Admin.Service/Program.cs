@@ -2,6 +2,7 @@ using Azure.Identity;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Configuration.AzureAppConfiguration;
 using Microsoft.Extensions.Options;
+using Saas.Admin.Service.Claims;
 using Saas.Admin.Service.Data;
 using Saas.Identity.Authorization.Handler;
 using Saas.Identity.Claims;
@@ -70,6 +71,13 @@ builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration,
 // handlers (which read ClaimTypes.NameIdentifier as a GUID) keep working. See
 // NameIdentifierClaimsTransformation.
 builder.Services.AddScoped<IClaimsTransformation, NameIdentifierClaimsTransformation>();
+
+// Entra External ID: B2C used to embed the user's SaaS 'permissions' claims in the token
+// via an IEF policy. External ID does not, so we resolve them server-side per request from
+// the Permissions API (keyed on the NameIdentifier object-id). Registered AFTER the
+// NameIdentifier mapping above so the object-id is in place. See PermissionsClaimsTransformation.
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IClaimsTransformation, PermissionsClaimsTransformation>();
 
 // Register authorization handlers for authorization
 builder.Services.AddSingleton<IAuthorizationHandler, SaasTenantPermissionAuthorizationHandler>();
