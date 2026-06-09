@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Identity.Web;
 using Saas.Admin.Service.Fulfillment;
 
 namespace Saas.Admin.Service.Controllers;
@@ -23,7 +24,11 @@ public class MarketplaceController(IMarketplaceFulfillmentService fulfillment) :
             return BadRequest("Marketplace token is required.");
         }
 
-        var resolved = await fulfillment.ResolveAsync(request.Token);
+        // The signed-in caller is the buyer; their home tenant becomes the subscription's
+        // customer-tenant key (used by customer self-service filtering).
+        Guid? customerTenantId = Guid.TryParse(User.GetTenantId(), out var tid) ? tid : null;
+
+        var resolved = await fulfillment.ResolveAsync(request.Token, customerTenantId);
         return Ok(resolved);
     }
 

@@ -1,0 +1,43 @@
+@using Saas.SignupAdministration.Web.Services
+@model IReadOnlyList<SubscriptionInfo>
+
+@{
+    ViewData["Title"] = "My Subscription";
+}
+
+<h1>My Subscription</h1>
+
+@if (Model.Count == 0)
+{
+    <p>You don't have any subscriptions for this product yet.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Subscription</th>
+                <th>Plan</th>
+                <th>Seats</th>
+                <th>Status</th>
+                <th>Workspace</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>@item.Name<br /><small class="text-muted">@item.SubscriptionId</small></td>
+                <td>@item.PlanId</td>
+                <td>@item.Quantity</td>
+                <td>@item.Status</td>
+                <td>@(item.TenantName ?? "—")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    <p class="text-muted">
+        To change your plan or seat quantity, manage this subscription in the
+        <a href="https://portal.azure.com" target="_blank" rel="noopener">Azure portal</a>.
+    </p>
+}

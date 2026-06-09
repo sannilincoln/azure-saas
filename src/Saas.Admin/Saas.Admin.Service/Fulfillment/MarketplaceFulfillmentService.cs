@@ -15,7 +15,7 @@ public class MarketplaceFulfillmentService(
     private const string StatusPendingFulfillmentStart = "PendingFulfillmentStart";
     private const string StatusSubscribed = "Subscribed";
 
-    public async Task<ResolvedSubscriptionDto> ResolveAsync(string marketplaceToken)
+    public async Task<ResolvedSubscriptionDto> ResolveAsync(string marketplaceToken, Guid? customerTenantId)
     {
         var resolved = await fulfillmentApi.ResolveAsync(marketplaceToken)
             ?? throw new InvalidOperationException("Marketplace token could not be resolved (expired, already used, or invalid).");
@@ -42,6 +42,14 @@ public class MarketplaceFulfillmentService(
         subscription.SubscriptionStatus = StatusPendingFulfillmentStart;
         subscription.IsActive = true;
         subscription.ModifyDate = DateTime.UtcNow;
+
+        // The buyer administers their own purchase: record their home tenant so customer
+        // self-service can later show them only their own subscription(s). Don't overwrite a
+        // previously captured value with null on a re-resolve.
+        if (customerTenantId is Guid tenantId)
+        {
+            subscription.PurchaserTenantId = tenantId;
+        }
 
         await marketplaceDb.SaveChangesAsync();
 

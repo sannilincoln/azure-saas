@@ -28,6 +28,10 @@ public static class MarketplaceServiceCollectionExtensions
         var options = configuration.GetRequiredSection(MarketplaceOptions.SectionName).Get<MarketplaceOptions>()
             ?? throw new InvalidOperationException("Marketplace section is missing from configuration.");
 
+        // Make the options injectable (e.g. the subscriptions console needs PublisherTenantId for
+        // the server-side publisher check).
+        services.Configure<MarketplaceOptions>(configuration.GetSection(MarketplaceOptions.SectionName));
+
         var tenantId = options.PublisherTenantId ?? throw new InvalidOperationException("Marketplace:PublisherTenantId is required.");
         var clientId = options.PublisherClientId ?? throw new InvalidOperationException("Marketplace:PublisherClientId is required.");
         var clientSecret = options.PublisherClientSecret ?? throw new InvalidOperationException("Marketplace:PublisherClientSecret is required.");
@@ -53,6 +57,9 @@ public static class MarketplaceServiceCollectionExtensions
         services.AddSingleton<AcceleratorILogger>(new SaaSClientLogger<FulfillmentApiService>());
         services.AddScoped<IFulfillmentApiService, FulfillmentApiService>();
         services.AddScoped<IMarketplaceFulfillmentService, MarketplaceFulfillmentService>();
+
+        // Read/manage layer behind the in-app publisher console + customer self-service.
+        services.AddScoped<ISubscriptionQueryService, SubscriptionQueryService>();
 
         // Connection webhook: inbound-JWT validator + our lifecycle handler.
         services.AddSingleton<ValidateJwtToken>();

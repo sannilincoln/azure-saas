@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Saas.Identity.Extensions;
 using Saas.Identity.Helper;
 using Saas.Admin.Client;
+using Microsoft.Identity.Web;
+using Saas.SignupAdministration.Web.Authorization;
 
 // Hint: For debugging purposes: https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet/wiki/PII
 // IdentityModelEventSource.ShowPII = true;
@@ -133,6 +135,43 @@ builder.Services.AddHttpClient<IMarketplaceAdminClient, MarketplaceAdminClient>(
             ?? throw new NullReferenceException($"{nameof(EntraAdminApiOptions)} Url cannot be null");
 
     httpClient.BaseAddress = new Uri(adminApiBaseUrl);
+});
+
+// Marketplace console authorization boundary. Secret-free: only the publisher tenant id is read
+// here (the SP secret stays in the Admin API). When unconfigured, the publisher policy denies
+// everyone (deny-by-default) while customer self-service remains a plain authenticated check.
+var publisherConsoleOptions = builder.Configuration
+    .GetSection(PublisherConsoleOptions.SectionName)
+    .Get<PublisherConsoleOptions>() ?? new PublisherConsoleOptions();
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(MarketplaceConsolePolicies.PublisherConsole, policy =>
+        policy.RequireAuthenticatedUser().RequireAssertion(context =>
+        {
+            if (!Guid.TryParse(publisherConsoleOptions.PublisherTenantId, out var publisherTenantId))
+            {
+                return false; // not configured => deny
+            }
+
+            if (!Guid.TryParse(context.User.GetTenantId(), out var callerTenantId)
+                || callerTenantId != publisherTenantId)
+            {
+                return false;
+            }
+
+            // Optional owner-role gate within the publisher tenant.
+            if (!string.IsNullOrWhiteSpace(publisherConsoleOptions.OwnerRole))
+            {
+                return context.User.IsInRole(publisherConsoleOptions.OwnerRole)
+                    || context.User.HasClaim("roles", publisherConsoleOptions.OwnerRole);
+            }
+
+            return true;
+        }));
+
+    options.AddPolicy(MarketplaceConsolePolicies.CustomerSelfService, policy =>
+        policy.RequireAuthenticatedUser());
 });
 
 builder.Services.AddSession(options =>

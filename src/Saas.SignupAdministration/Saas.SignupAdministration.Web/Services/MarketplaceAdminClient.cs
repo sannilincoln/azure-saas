@@ -11,6 +11,18 @@ public interface IMarketplaceAdminClient
 {
     Task<ResolvedSubscription> ResolveAsync(string token);
     Task ActivateAsync(Guid subscriptionId, Guid tenantId);
+
+    /// <summary>All subscriptions — backs the publisher console (Admin API enforces publisher-only).</summary>
+    Task<IReadOnlyList<SubscriptionInfo>> GetAllSubscriptionsAsync();
+
+    /// <summary>The caller's own subscriptions — backs customer self-service (Admin API filters by tid).</summary>
+    Task<IReadOnlyList<SubscriptionInfo>> GetMySubscriptionsAsync();
+
+    /// <summary>Re-pull live state from Microsoft (publisher console).</summary>
+    Task<SubscriptionInfo?> RefreshSubscriptionAsync(Guid subscriptionId);
+
+    /// <summary>Administratively override a subscription's status (publisher console).</summary>
+    Task<SubscriptionInfo?> OverrideSubscriptionStatusAsync(Guid subscriptionId, string status);
 }
 
 public record ResolvedSubscription(
@@ -19,6 +31,19 @@ public record ResolvedSubscription(
     string? OfferId,
     string? PlanId,
     int Quantity);
+
+public record SubscriptionInfo(
+    Guid SubscriptionId,
+    string? Name,
+    string? OfferId,
+    string? PlanId,
+    int Quantity,
+    string? Status,
+    string? PurchaserEmail,
+    Guid? CustomerTenantId,
+    Guid? TenantId,
+    string? TenantName,
+    DateTime? CreatedTime);
 
 /// <summary>
 /// Thin typed client over the Admin API's marketplace endpoints. Reuses <see cref="OAuthBaseClient"/>
@@ -53,5 +78,46 @@ public class MarketplaceAdminClient(
 
         using var response = await httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
+    }
+
+    public Task<IReadOnlyList<SubscriptionInfo>> GetAllSubscriptionsAsync() =>
+        GetListAsync("api/marketplace/subscriptions");
+
+    public Task<IReadOnlyList<SubscriptionInfo>> GetMySubscriptionsAsync() =>
+        GetListAsync("api/marketplace/subscriptions/mine");
+
+    public Task<SubscriptionInfo?> RefreshSubscriptionAsync(Guid subscriptionId) =>
+        PostForSubscriptionAsync($"api/marketplace/subscriptions/{subscriptionId}/refresh", content: null);
+
+    public Task<SubscriptionInfo?> OverrideSubscriptionStatusAsync(Guid subscriptionId, string status) =>
+        PostForSubscriptionAsync($"api/marketplace/subscriptions/{subscriptionId}/status", new { status });
+
+    private async Task<IReadOnlyList<SubscriptionInfo>> GetListAsync(string relativeUri)
+    {
+        using var request = await CreateHttpRequestMessageAsync(CancellationToken.None);
+        request.Method = HttpMethod.Get;
+        request.RequestUri = new Uri(relativeUri, UriKind.Relative);
+
+        using var response = await httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<List<SubscriptionInfo>>()
+            ?? new List<SubscriptionInfo>();
+    }
+
+    private async Task<SubscriptionInfo?> PostForSubscriptionAsync(string relativeUri, object? content)
+    {
+        using var request = await CreateHttpRequestMessageAsync(CancellationToken.None);
+        request.Method = HttpMethod.Post;
+        request.RequestUri = new Uri(relativeUri, UriKind.Relative);
+        if (content is not null)
+        {
+            request.Content = JsonContent.Create(content);
+        }
+
+        using var response = await httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<SubscriptionInfo>();
     }
 }
