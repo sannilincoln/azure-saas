@@ -30,7 +30,8 @@ public record ResolvedSubscription(
     string? SubscriptionName,
     string? OfferId,
     string? PlanId,
-    int Quantity);
+    int Quantity,
+    int ProductTierId);
 
 public record SubscriptionInfo(
     Guid SubscriptionId,

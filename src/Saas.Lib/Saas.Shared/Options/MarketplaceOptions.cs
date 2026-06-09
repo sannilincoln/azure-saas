@@ -21,4 +21,12 @@ public record MarketplaceOptions
 
     /// <summary>URL customers are sent to after onboarding completes (the running SaaS app).</summary>
     public string? SaaSAppUrl { get; init; }
+
+    /// <summary>
+    /// Maps an Azure Marketplace plan id (what the buyer purchased on Azure) to this product's
+    /// internal ProductTier id, so a marketplace-onboarded tenant is provisioned at the purchased
+    /// tier without the in-app service-plan step. Keyed by plan id; value is the ProductTier id.
+    /// A plan not present in the map resolves to tier 0 (the default/unmapped tier).
+    /// </summary>
+    public Dictionary<string, int>? PlanToProductTier { get; init; }
 }

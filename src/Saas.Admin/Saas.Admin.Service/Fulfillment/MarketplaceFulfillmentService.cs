@@ -2,7 +2,9 @@ using Marketplace.SaaS.Accelerator.DataAccess.Context;
 using Marketplace.SaaS.Accelerator.DataAccess.Entities;
 using Marketplace.SaaS.Accelerator.Services.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Saas.Admin.Service.Data;
+using Saas.Shared.Options;
 
 namespace Saas.Admin.Service.Fulfillment;
 
@@ -10,6 +12,7 @@ public class MarketplaceFulfillmentService(
     IFulfillmentApiService fulfillmentApi,
     SaasKitContext marketplaceDb,
     TenantsContext tenantsDb,
+    IOptions<MarketplaceOptions> marketplaceOptions,
     ILogger<MarketplaceFulfillmentService> logger) : IMarketplaceFulfillmentService
 {
     private const string StatusPendingFulfillmentStart = "PendingFulfillmentStart";
@@ -53,8 +56,10 @@ public class MarketplaceFulfillmentService(
 
         await marketplaceDb.SaveChangesAsync();
 
-        logger.LogInformation("Resolved + persisted marketplace subscription {SubscriptionId} (plan {PlanId}, qty {Quantity}).",
-            resolved.SubscriptionId, resolved.PlanId, resolved.Quantity);
+        var productTierId = MapPlanToProductTier(resolved.PlanId);
+
+        logger.LogInformation("Resolved + persisted marketplace subscription {SubscriptionId} (plan {PlanId} -> tier {ProductTierId}, qty {Quantity}).",
+            resolved.SubscriptionId, resolved.PlanId, productTierId, resolved.Quantity);
 
         return new ResolvedSubscriptionDto
         {
@@ -63,6 +68,7 @@ public class MarketplaceFulfillmentService(
             OfferId = resolved.OfferId,
             PlanId = resolved.PlanId,
             Quantity = resolved.Quantity,
+            ProductTierId = productTierId,
         };
     }
 
@@ -88,5 +94,27 @@ public class MarketplaceFulfillmentService(
 
         logger.LogInformation("Activated marketplace subscription {SubscriptionId} and linked it to tenant {TenantId}.",
             subscriptionId, tenantId);
+    }
+
+    /// <summary>
+    /// Maps the purchased marketplace plan id to this product's internal ProductTier id via the
+    /// configured Marketplace:PlanToProductTier map. Returns 0 (default tier) when the map is
+    /// absent or the plan isn't listed — onboarding still proceeds, just at the default tier.
+    /// </summary>
+    private int MapPlanToProductTier(string? planId)
+    {
+        var map = marketplaceOptions.Value.PlanToProductTier;
+        if (map is null || string.IsNullOrWhiteSpace(planId))
+        {
+            return 0;
+        }
+
+        if (map.TryGetValue(planId, out var tier))
+        {
+            return tier;
+        }
+
+        logger.LogWarning("Marketplace plan '{PlanId}' is not in Marketplace:PlanToProductTier; defaulting to tier 0.", planId);
+        return 0;
     }
 }

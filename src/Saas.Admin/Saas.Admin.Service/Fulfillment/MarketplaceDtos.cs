@@ -17,4 +17,10 @@ public record ResolvedSubscriptionDto
     public string? OfferId { get; init; }
     public string? PlanId { get; init; }
     public int Quantity { get; init; }
+
+    /// <summary>
+    /// The internal ProductTier id the purchased plan maps to (via Marketplace:PlanToProductTier).
+    /// Used to provision the tenant at the purchased tier and skip the in-app service-plan step.
+    /// </summary>
+    public int ProductTierId { get; init; }
 }

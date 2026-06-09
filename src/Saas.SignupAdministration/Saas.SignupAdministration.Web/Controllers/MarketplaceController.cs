@@ -29,9 +29,13 @@ public class MarketplaceController(
 
         onboardingWorkflow.OnboardingWorkflowItem.OrganizationName = resolved.SubscriptionName ?? string.Empty;
         onboardingWorkflow.OnboardingWorkflowItem.SubscriptionId = resolved.SubscriptionId;
+        // Pre-set the tier from the purchased plan so the wizard can skip the service-plan step
+        // (the buyer already chose a plan on Azure; they must not be able to override it here).
+        onboardingWorkflow.OnboardingWorkflowItem.ProductId = resolved.ProductTierId;
         onboardingWorkflow.PersistToSession();
 
-        logger.LogInformation("Resolved marketplace subscription {SubscriptionId}; starting onboarding.", resolved.SubscriptionId);
+        logger.LogInformation("Resolved marketplace subscription {SubscriptionId} (tier {ProductTierId}); starting onboarding.",
+            resolved.SubscriptionId, resolved.ProductTierId);
 
         return RedirectToAction(SR.OrganizationNameAction, SR.OnboardingWorkflowController);
     }
