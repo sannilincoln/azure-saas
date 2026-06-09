@@ -15,7 +15,7 @@ public static partial class SaasIdentityConfigurationBuilderExtensions
         this IServiceCollection services, 
         IEnumerable<string>? scopes = default)
         where TProvider : ISaasApi
-        where TOptions : AzureAdB2CBase
+        where TOptions : EntraIdentityOptions
     {
 
         services.AddMemoryCache();
@@ -47,7 +47,7 @@ public static partial class SaasIdentityConfigurationBuilderExtensions
 
 public class SaasApiClientCredentialBuilder<TProvider, TOptions>(IServiceCollection services)
     where TProvider : ISaasApi
-    where TOptions : AzureAdB2CBase
+    where TOptions : EntraIdentityOptions
 {
     private readonly IServiceCollection _services = services;
 

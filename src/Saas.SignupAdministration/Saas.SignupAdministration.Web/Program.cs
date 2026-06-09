@@ -53,8 +53,8 @@ else
     InitializeProdEnvironment();
 }
 
-builder.Services.Configure<AzureB2CSignupAdminOptions>(
-        builder.Configuration.GetRequiredSection(AzureB2CSignupAdminOptions.SectionName));
+builder.Services.Configure<EntraSignupAdminOptions>(
+        builder.Configuration.GetRequiredSection(EntraSignupAdminOptions.SectionName));
 
 // Load the email settings 
 builder.Services.Configure<EmailOptions>(
@@ -81,7 +81,7 @@ builder.Services.AddMemoryCache();
 // Session persistence is the default
 builder.Services.AddScoped<IPersistenceProvider, JsonSessionPersistenceProvider>();
 
-// Add the user details that come back from B2C
+// Add the user details that come back from Microsoft Entra
 builder.Services.AddScoped<IApplicationUser, ApplicationUser>();
 
 var applicationUri = builder.Configuration.GetRequiredSection(AdminApiOptions.SectionName)
@@ -92,7 +92,7 @@ var scopes = builder.Configuration.GetRequiredSection(AdminApiOptions.SectionNam
     .Get<AdminApiOptions>()?.Scopes
         ?? throw new NullReferenceException("Scopes cannot be null");
 
-// Azure AD B2C requires scope config with a fully qualified url along with an identifier. To make configuring it more manageable and less
+// Microsoft Entra requires scope config with a fully qualified url along with an identifier. To make configuring it more manageable and less
 // error prone, we store the names of the scopes separately from the application id uri and combine them when neded.
 var fullyQualifiedScopes = scopes.Select(scope => $"{applicationUri}/{scope}".Trim('/')).ToArray();
 
@@ -101,7 +101,7 @@ builder.Services.AddSaasWebAppAuthentication(
     fullyQualifiedScopes,
     options =>
     {
-        builder.Configuration.Bind(AzureB2CSignupAdminOptions.SectionName, options);
+        builder.Configuration.Bind(EntraSignupAdminOptions.SectionName, options);
     })
     .SaaSAppCallDownstreamApi()
     .AddInMemoryTokenCaches();
@@ -117,8 +117,8 @@ builder.Services.AddHttpClient<IAdminServiceClient, AdminServiceClient>(httpClie
     string adminApiBaseUrl = builder.Environment.IsDevelopment()
         ? builder.Configuration.GetRequiredSection("adminApi:baseUrl").Value
             ?? throw new NullReferenceException("Environment is running in development mode. Please specify the value for 'adminApi:baseUrl' in appsettings.json.")
-        : builder.Configuration.GetRequiredSection(AzureB2CAdminApiOptions.SectionName)?.Get<AzureB2CAdminApiOptions>()?.BaseUrl
-            ?? throw new NullReferenceException($"{nameof(AzureB2CAdminApiOptions)} Url cannot be null");
+        : builder.Configuration.GetRequiredSection(EntraAdminApiOptions.SectionName)?.Get<EntraAdminApiOptions>()?.BaseUrl
+            ?? throw new NullReferenceException($"{nameof(EntraAdminApiOptions)} Url cannot be null");
 
     httpClient.BaseAddress = new Uri(adminApiBaseUrl);
 });

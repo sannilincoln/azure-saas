@@ -46,11 +46,11 @@ else
     InitializeProdEnvironment();
 }
 
-builder.Services.Configure<AzureB2CAdminApiOptions>(
-        builder.Configuration.GetRequiredSection(AzureB2CAdminApiOptions.SectionName));
+builder.Services.Configure<EntraAdminApiOptions>(
+        builder.Configuration.GetRequiredSection(EntraAdminApiOptions.SectionName));
 
-builder.Services.Configure<AzureB2CPermissionsApiOptions>(
-        builder.Configuration.GetRequiredSection(AzureB2CPermissionsApiOptions.SectionName));
+builder.Services.Configure<EntraPermissionsApiOptions>(
+        builder.Configuration.GetRequiredSection(EntraPermissionsApiOptions.SectionName));
 
 builder.Services.Configure<PermissionsApiOptions>(
         builder.Configuration.GetRequiredSection(PermissionsApiOptions.SectionName));
@@ -64,7 +64,7 @@ builder.Services.Configure<SaasAuthorizationOptions>(
 builder.Services.AddHttpContextAccessor();
 
 // Add authentication for incoming requests
-builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration, AzureB2CAdminApiOptions.SectionName);
+builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration, EntraAdminApiOptions.SectionName);
 
 // Entra External ID: a single IClaimsTransformation that (1) maps the 'oid' claim into
 // NameIdentifier so the authorization handlers (which read ClaimTypes.NameIdentifier as a
@@ -92,7 +92,7 @@ builder.Services.AddHttpClient<IPermissionsServiceClient, PermissionsServiceClie
     {
         using var scope = serviceProvider.CreateScope();
 
-        var baseUrl = scope.ServiceProvider.GetRequiredService<IOptions<AzureB2CPermissionsApiOptions>>().Value.BaseUrl
+        var baseUrl = scope.ServiceProvider.GetRequiredService<IOptions<EntraPermissionsApiOptions>>().Value.BaseUrl
             ?? throw new NullReferenceException("Permissions Base Url cannot be null");
 
         var apiKey = scope.ServiceProvider.GetRequiredService<IOptions<PermissionsApiOptions>>().Value.ApiKey

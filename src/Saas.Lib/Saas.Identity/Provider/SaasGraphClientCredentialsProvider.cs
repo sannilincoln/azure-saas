@@ -9,7 +9,7 @@ namespace Saas.Identity.Provider;
 public class SaasGraphClientCredentialsProvider<TOptions>(
     SaasApiAuthenticationProvider<ISaasMicrosoftGraphApi, TOptions> authProvider,
     ILogger<SaasGraphClientCredentialsProvider<TOptions>> logger) : IAuthenticationProvider
-    where TOptions : AzureAdB2CBase
+    where TOptions : EntraIdentityOptions
 {
     private readonly ILogger _logger = logger;
     private readonly SaasApiAuthenticationProvider<ISaasMicrosoftGraphApi, TOptions> _authProvider = authProvider;
