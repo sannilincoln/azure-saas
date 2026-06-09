@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Caching.Memory;
 using Saas.Identity.Authorization.Model.Claim;
 using Saas.Identity.Authorization.Model.Kind;
+using Saas.Identity.Claims;
 using Saas.Permissions.Client;
 
 namespace Saas.Admin.Service.Claims;
@@ -49,13 +50,19 @@ public class PermissionsClaimsTransformation(
             return principal;
         }
 
+        // Map the External ID 'oid' into NameIdentifier ourselves. ASP.NET Core resolves a
+        // SINGLE IClaimsTransformation from DI (the last one registered), so we cannot rely on
+        // NameIdentifierClaimsTransformation also being registered — registering both would
+        // silence one of them. This transformation owns both responsibilities.
+        NameIdentifierClaimsTransformation.TryMapObjectIdToNameIdentifier(identity);
+
         // IClaimsTransformation can run more than once per request; don't duplicate claims.
         if (identity.HasClaim(claim => claim.Type == PermissionClaimType))
         {
             return principal;
         }
 
-        // NameIdentifier carries the directory object id GUID (mapped from 'oid' upstream).
+        // NameIdentifier carries the directory object id GUID (mapped from 'oid' above).
         // Without it we can't look up permissions, so add none and let authorization deny.
         if (!Guid.TryParse(identity.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId))
         {

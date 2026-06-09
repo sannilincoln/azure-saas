@@ -5,7 +5,6 @@ using Microsoft.Extensions.Options;
 using Saas.Admin.Service.Claims;
 using Saas.Admin.Service.Data;
 using Saas.Identity.Authorization.Handler;
-using Saas.Identity.Claims;
 using Saas.Identity.Authorization.Option;
 using Saas.Identity.Authorization.Provider;
 using Saas.Permissions.Client;
@@ -67,15 +66,13 @@ builder.Services.AddHttpContextAccessor();
 // Add authentication for incoming requests
 builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration, AzureB2CAdminApiOptions.SectionName);
 
-// Entra External ID: map the 'oid' claim into NameIdentifier so the authorization
-// handlers (which read ClaimTypes.NameIdentifier as a GUID) keep working. See
-// NameIdentifierClaimsTransformation.
-builder.Services.AddScoped<IClaimsTransformation, NameIdentifierClaimsTransformation>();
-
-// Entra External ID: B2C used to embed the user's SaaS 'permissions' claims in the token
-// via an IEF policy. External ID does not, so we resolve them server-side per request from
-// the Permissions API (keyed on the NameIdentifier object-id). Registered AFTER the
-// NameIdentifier mapping above so the object-id is in place. See PermissionsClaimsTransformation.
+// Entra External ID: a single IClaimsTransformation that (1) maps the 'oid' claim into
+// NameIdentifier so the authorization handlers (which read ClaimTypes.NameIdentifier as a
+// GUID) keep working, and (2) resolves the user's SaaS 'permissions' claims server-side from
+// the Permissions API. These MUST live in one transformation: ASP.NET Core resolves a single
+// IClaimsTransformation from DI (the last registered), so registering two would silence one.
+// B2C embedded permissions in the token via an IEF policy; External ID does not, so we resolve
+// them per request keyed on the NameIdentifier object-id. See PermissionsClaimsTransformation.
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IClaimsTransformation, PermissionsClaimsTransformation>();
 
