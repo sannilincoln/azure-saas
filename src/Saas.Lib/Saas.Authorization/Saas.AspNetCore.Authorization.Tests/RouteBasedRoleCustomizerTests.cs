@@ -22,7 +22,7 @@ using Xunit;
 
 namespace Saas.AspNetCore.Authorization.Tests
 {
-    public class RouteBasedRoleCusomizerTests
+    public class RouteBasedRoleCustomizerTests
     {
         [Theory, AutoDataNSubstitute(typeof(HttpWithRouting))]
         public void Attribute_Behaves_As_Expected(IRoutingFeature wrongRouting, [Frozen]IRoutingFeature routing, HttpContext context, IHttpContextAccessor accessor)
@@ -39,7 +39,7 @@ namespace Saas.AspNetCore.Authorization.Tests
 
         [Theory, AutoDataNSubstitute(typeof(HttpWithRouting))]
         public void Customize_ShouldReturnOriginals_WhenFlagSet([Frozen]IRoutingFeature routing, 
-                                                                RouteBasedRoleCusomizer customizer, 
+                                                                RouteBasedRoleCustomizer customizer, 
                                                                 string[] allowedRoles, string routeValue)
         {
             customizer.IncludeOriginals = true;
@@ -56,7 +56,7 @@ namespace Saas.AspNetCore.Authorization.Tests
 
         [Theory, AutoDataNSubstitute(typeof(HttpWithRouting))]
         public void Customize_ShouldReturnOriginals_WhenFlagNotSet([Frozen]IRoutingFeature routing, 
-                                                                   RouteBasedRoleCusomizer customizer,
+                                                                   RouteBasedRoleCustomizer customizer,
                                                                    string[] allowedRoles, string routeValue)
         {
             customizer.IncludeOriginals = false;
@@ -72,7 +72,7 @@ namespace Saas.AspNetCore.Authorization.Tests
 
         [Theory, AutoDataNSubstitute(typeof(HttpWithRouting))]
         public void Customize_EmptyList_WhenRouteValueIsMissing([Frozen] IRoutingFeature routing, 
-                                                                RouteBasedRoleCusomizer customizer, 
+                                                                RouteBasedRoleCustomizer customizer, 
                                                                 string[] allowedRoles, string routeValue)
         {
             customizer.IncludeOriginals = true;
@@ -84,7 +84,7 @@ namespace Saas.AspNetCore.Authorization.Tests
 
         [Theory, AutoDataNSubstitute(typeof(HttpWithRouting))]
         public void Customize_EmptyList_WhenAllowedRolesIsNull([Frozen] IRoutingFeature routing, 
-                                                                RouteBasedRoleCusomizer customizer,
+                                                                RouteBasedRoleCustomizer customizer,
                                                                 string routeValue)
         {
             customizer.IncludeOriginals = true;
