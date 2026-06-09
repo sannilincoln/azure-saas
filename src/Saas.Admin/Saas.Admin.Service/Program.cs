@@ -9,6 +9,7 @@ using Saas.Identity.Authorization.Option;
 using Saas.Identity.Authorization.Provider;
 using Saas.Permissions.Client;
 using Saas.Shared.Options;
+using Saas.Admin.Service.Fulfillment;
 using Marketplace.SaaS.Accelerator.DataAccess.Context;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -124,6 +125,10 @@ if (!string.IsNullOrWhiteSpace(marketplaceConnectionString))
 {
     builder.Services.AddDbContext<SaasKitContext>(options =>
         options.UseSqlServer(marketplaceConnectionString));
+
+    // Fulfillment client (publisher service principal) + resolve/activate glue. Registered
+    // alongside the marketplace DB so the feature is all-or-nothing per environment.
+    builder.Services.AddMarketplaceFulfillment(builder.Configuration);
 }
 
 var app = builder.Build();

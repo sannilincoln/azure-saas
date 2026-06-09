@@ -15,6 +15,9 @@
 		<PackageReference Include="Dawn.Guard" Version="1.12.0" />
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.22.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.AzureAppConfiguration" Version="7.0.0" />
+		<!-- Marketplace.SaaS.Client 2.2.0 needs Roslyn 4.14+; EF Design pins Workspaces to 4.5.0.
+		     Reference the higher version directly to resolve the transitive conflict (NU1107). -->
+		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.6" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.6">
 			<PrivateAssets>all</PrivateAssets>
@@ -31,5 +34,6 @@
 	  <ProjectReference Include="..\..\Saas.Lib\Saas.Identity\Saas.Identity.csproj" />
 	  <ProjectReference Include="..\..\Saas.Lib\Saas.Shared\Saas.Shared.csproj" />
 	  <ProjectReference Include="..\..\Saas.Marketplace\DataAccess\DataAccess.csproj" />
+	  <ProjectReference Include="..\..\Saas.Marketplace\Services\Services.csproj" />
 	</ItemGroup>
 </Project>

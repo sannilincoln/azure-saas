@@ -1,0 +1,84 @@
+using Marketplace.SaaS.Accelerator.DataAccess.Context;
+using Marketplace.SaaS.Accelerator.DataAccess.Entities;
+using Marketplace.SaaS.Accelerator.Services.Contracts;
+using Microsoft.EntityFrameworkCore;
+using Saas.Admin.Service.Data;
+
+namespace Saas.Admin.Service.Fulfillment;
+
+public class MarketplaceFulfillmentService(
+    IFulfillmentApiService fulfillmentApi,
+    SaasKitContext marketplaceDb,
+    TenantsContext tenantsDb,
+    ILogger<MarketplaceFulfillmentService> logger) : IMarketplaceFulfillmentService
+{
+    private const string StatusPendingFulfillmentStart = "PendingFulfillmentStart";
+    private const string StatusSubscribed = "Subscribed";
+
+    public async Task<ResolvedSubscriptionDto> ResolveAsync(string marketplaceToken)
+    {
+        var resolved = await fulfillmentApi.ResolveAsync(marketplaceToken)
+            ?? throw new InvalidOperationException("Marketplace token could not be resolved (expired, already used, or invalid).");
+
+        // Persist immediately and durably — the token is single-use/24h, so we never rely on
+        // the onboarding session to carry the subscription forward.
+        var subscription = await marketplaceDb.Subscriptions
+            .FirstOrDefaultAsync(s => s.AmpsubscriptionId == resolved.SubscriptionId);
+
+        if (subscription is null)
+        {
+            subscription = new Subscriptions
+            {
+                AmpsubscriptionId = resolved.SubscriptionId,
+                CreateDate = DateTime.UtcNow,
+            };
+            marketplaceDb.Subscriptions.Add(subscription);
+        }
+
+        subscription.Name = resolved.SubscriptionName;
+        subscription.AmpplanId = resolved.PlanId;
+        subscription.AmpOfferId = resolved.OfferId;
+        subscription.Ampquantity = resolved.Quantity;
+        subscription.SubscriptionStatus = StatusPendingFulfillmentStart;
+        subscription.IsActive = true;
+        subscription.ModifyDate = DateTime.UtcNow;
+
+        await marketplaceDb.SaveChangesAsync();
+
+        logger.LogInformation("Resolved + persisted marketplace subscription {SubscriptionId} (plan {PlanId}, qty {Quantity}).",
+            resolved.SubscriptionId, resolved.PlanId, resolved.Quantity);
+
+        return new ResolvedSubscriptionDto
+        {
+            SubscriptionId = resolved.SubscriptionId,
+            SubscriptionName = resolved.SubscriptionName,
+            OfferId = resolved.OfferId,
+            PlanId = resolved.PlanId,
+            Quantity = resolved.Quantity,
+        };
+    }
+
+    public async Task ActivateAsync(Guid subscriptionId, Guid tenantId)
+    {
+        var subscription = await marketplaceDb.Subscriptions
+            .FirstOrDefaultAsync(s => s.AmpsubscriptionId == subscriptionId)
+            ?? throw new InvalidOperationException($"Subscription {subscriptionId} not found; resolve must run before activate.");
+
+        // Activate with Microsoft — this starts billing, so it must happen only after
+        // onboarding has succeeded (otherwise we'd charge for a tenant that never provisioned).
+        await fulfillmentApi.ActivateSubscriptionAsync(subscriptionId, subscription.AmpplanId);
+
+        subscription.SubscriptionStatus = StatusSubscribed;
+        subscription.ModifyDate = DateTime.UtcNow;
+        await marketplaceDb.SaveChangesAsync();
+
+        var tenant = await tenantsDb.Tenants.FindAsync(tenantId)
+            ?? throw new InvalidOperationException($"Tenant {tenantId} not found when linking subscription {subscriptionId}.");
+        tenant.SubscriptionId = subscriptionId;
+        tenant.SubscriptionStatus = StatusSubscribed;
+        await tenantsDb.SaveChangesAsync();
+
+        logger.LogInformation("Activated marketplace subscription {SubscriptionId} and linked it to tenant {TenantId}.",
+            subscriptionId, tenantId);
+    }
+}
