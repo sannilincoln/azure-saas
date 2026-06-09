@@ -7,6 +7,8 @@ public class NewTenantRequestTests
     {
         Tenant tenant = tenantRequest.ToTenant();
 
-        AssertAdditions.AllPropertiesAreEqual(tenant, tenantRequest, nameof(tenant.ConcurrencyToken), nameof(tenant.CreatedTime), nameof(tenant.Id));
+        // SubscriptionId/SubscriptionStatus are marketplace-linkage columns set during fulfillment,
+        // not part of the new-tenant request copy contract — skip them like the other non-copied fields.
+        AssertAdditions.AllPropertiesAreEqual(tenant, tenantRequest, nameof(tenant.ConcurrencyToken), nameof(tenant.CreatedTime), nameof(tenant.Id), nameof(tenant.SubscriptionId), nameof(tenant.SubscriptionStatus));
     }
 }
