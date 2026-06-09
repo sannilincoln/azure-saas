@@ -3,6 +3,7 @@ using Saas.Identity.Authorization.Model.Claim;
 using Saas.Identity.Authorization.Model.Data;
 using Saas.Identity.Authorization.Model.Kind;
 using Saas.Identity.Authorization.Requirement;
+using Saas.Admin.Service.Fulfillment;
 using Saas.Permissions.Client;
 using System.Net.Mime;
 
@@ -15,12 +16,14 @@ public class TenantsController : ControllerBase
 {
     private readonly ITenantService _tenantService;
     private readonly IPermissionsServiceClient _permissionsServiceClient;
+    private readonly IMarketplaceSeatService _seatService;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger _logger;
 
     public TenantsController(
-        ITenantService tenantService, 
+        ITenantService tenantService,
         IPermissionsServiceClient permissionService,
+        IMarketplaceSeatService seatService,
         IHttpContextAccessor httpContextAccessor,
         ILogger<TenantsController> logger)
     {
@@ -28,6 +31,7 @@ public class TenantsController : ControllerBase
         _httpContextAccessor = httpContextAccessor;
         _tenantService = tenantService;
         _permissionsServiceClient = permissionService;
+        _seatService = seatService;
     }
 
     /// <summary>
@@ -413,15 +417,27 @@ public class TenantsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
 
     [SaasAuthorize<SaasTenantPermissionRequirement, TenantPermissionKind>(TenantPermissionKind.Admin, "tenantId")]
     public async Task<IActionResult> InviteUserToTenant(Guid tenantId, string userEmail)
     {
+        try
+        {
+            // Enforce the purchased seat count before adding a user (no-op for non-marketplace tenants).
+            await _seatService.EnsureSeatAvailableAsync(tenantId);
+        }
+        catch (SeatLimitExceededException ex)
+        {
+            _logger.LogInformation(ex, "Add-user rejected for tenant {TenantId}: seat limit reached.", tenantId);
+            return Conflict(ex.Message);
+        }
+
         await _permissionsServiceClient.AddUserPermissionsToTenantByEmailAsync(
-            tenantId, 
-            userEmail, 
+            tenantId,
+            userEmail,
             new string[] { TenantPermissionKind.Admin.ToString() });
-        
+
         return NoContent();
     }
 

@@ -115,6 +115,10 @@ builder.Services.AddDbContext<TenantsContext>(options =>
     options.UseSqlServer(sqlConnectionString);
 });
 
+// Default seat guard: enforces nothing until the marketplace feature is configured below. The
+// real implementation is registered last inside the guard so it wins the single-resolve.
+builder.Services.AddScoped<IMarketplaceSeatService, NoopMarketplaceSeatService>();
+
 // Azure Marketplace fulfillment store — the vendored accelerator SaasKitContext. Registered
 // only when a marketplace connection string is configured, so the Admin API keeps working in
 // environments that don't yet have the marketplace database provisioned (added in Phase H).
@@ -129,6 +133,9 @@ if (!string.IsNullOrWhiteSpace(marketplaceConnectionString))
     // Fulfillment client (publisher service principal) + resolve/activate glue. Registered
     // alongside the marketplace DB so the feature is all-or-nothing per environment.
     builder.Services.AddMarketplaceFulfillment(builder.Configuration);
+
+    // Real per-seat enforcement (overrides the no-op above for this environment).
+    builder.Services.AddScoped<IMarketplaceSeatService, MarketplaceSeatService>();
 }
 
 var app = builder.Build();

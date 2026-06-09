@@ -148,6 +148,10 @@ app.UseCookiePolicy(new CookiePolicyOptions
     Secure = CookieSecurePolicy.Always
 });
 
+// Gate access on Marketplace subscription status (Suspended/Unsubscribed → blocked). Must run
+// after authentication/authorization so the downstream Admin API call carries the user's token.
+app.UseMiddleware<Saas.Application.Web.Middleware.RequireActiveSubscriptionMiddleware>();
+
 app.MapControllerRoute(name: SR.DefaultName, pattern: SR.MapControllerRoutePattern);
 app.MapRazorPages();
 
