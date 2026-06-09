@@ -9,6 +9,7 @@ using Saas.Identity.Authorization.Option;
 using Saas.Identity.Authorization.Provider;
 using Saas.Permissions.Client;
 using Saas.Shared.Options;
+using Marketplace.SaaS.Accelerator.DataAccess.Context;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddApplicationInsightsTelemetry();
@@ -112,6 +113,18 @@ builder.Services.AddDbContext<TenantsContext>(options =>
 
     options.UseSqlServer(sqlConnectionString);
 });
+
+// Azure Marketplace fulfillment store — the vendored accelerator SaasKitContext. Registered
+// only when a marketplace connection string is configured, so the Admin API keeps working in
+// environments that don't yet have the marketplace database provisioned (added in Phase H).
+var marketplaceConnectionString = builder.Configuration.GetRequiredSection(SqlOptions.SectionName)
+    .Get<SqlOptions>()?.MarketplaceSQLConnectionString;
+
+if (!string.IsNullOrWhiteSpace(marketplaceConnectionString))
+{
+    builder.Services.AddDbContext<SaasKitContext>(options =>
+        options.UseSqlServer(marketplaceConnectionString));
+}
 
 var app = builder.Build();
 

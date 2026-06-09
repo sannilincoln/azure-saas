@@ -8,6 +8,12 @@ public class TenantEntityTypeConfiguration : IEntityTypeConfiguration<Tenant>
         builder.HasKey(t => t.Id);
         builder.HasIndex(t => t.Route).IsUnique(true);
 
+        // One marketplace subscription maps to at most one tenant. Filtered so the many
+        // non-marketplace tenants (NULL SubscriptionId) don't collide on the unique index.
+        builder.HasIndex(t => t.SubscriptionId)
+            .IsUnique(true)
+            .HasFilter("[SubscriptionId] IS NOT NULL");
+
         builder.Property(t => t.Name).IsRequired();
         builder.Property(t => t.Route).IsRequired();
         builder.Property(t => t.CreatorEmail).IsRequired();
