@@ -3,6 +3,7 @@ using Marketplace.SaaS.Accelerator.Services.Configurations;
 using Marketplace.SaaS.Accelerator.Services.Contracts;
 using Marketplace.SaaS.Accelerator.Services.Services;
 using Marketplace.SaaS.Accelerator.Services.Utilities;
+using Marketplace.SaaS.Accelerator.Services.WebHook;
 using Microsoft.Marketplace.SaaS;
 using Saas.Shared.Options;
 using AcceleratorILogger = Marketplace.SaaS.Accelerator.Services.Contracts.ILogger;
@@ -11,6 +12,12 @@ namespace Saas.Admin.Service.Fulfillment;
 
 public static class MarketplaceServiceCollectionExtensions
 {
+    /// <summary>
+    /// The fixed Azure Marketplace SaaS API resource (app) id. Inbound connection-webhook JWTs
+    /// carry this as their azp/appid; we validate against it.
+    /// </summary>
+    public const string MarketplaceSaaSApiResourceId = "20e940b3-4c77-4b0b-9a53-9e16a1b010a7";
+
     /// <summary>
     /// Registers the vendored accelerator fulfillment client (authenticating as the publisher
     /// service principal) and our fulfillment glue. Call only when the marketplace feature is
@@ -37,12 +44,19 @@ public static class MarketplaceServiceCollectionExtensions
             ClientId = clientId,
             ClientSecret = clientSecret,
             TenantId = tenantId,
+            // Resource is the marketplace SaaS API app id — used by ValidateJwtToken to check the
+            // inbound webhook JWT's azp/appid claim.
+            Resource = MarketplaceSaaSApiResourceId,
             SaaSAppUrl = options.SaaSAppUrl,
         });
 
         services.AddSingleton<AcceleratorILogger>(new SaaSClientLogger<FulfillmentApiService>());
         services.AddScoped<IFulfillmentApiService, FulfillmentApiService>();
         services.AddScoped<IMarketplaceFulfillmentService, MarketplaceFulfillmentService>();
+
+        // Connection webhook: inbound-JWT validator + our lifecycle handler.
+        services.AddSingleton<ValidateJwtToken>();
+        services.AddScoped<IWebhookHandler, MarketplaceWebhookHandler>();
 
         return services;
     }
