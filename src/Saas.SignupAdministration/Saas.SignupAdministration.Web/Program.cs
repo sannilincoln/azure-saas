@@ -123,6 +123,18 @@ builder.Services.AddHttpClient<IAdminServiceClient, AdminServiceClient>(httpClie
     httpClient.BaseAddress = new Uri(adminApiBaseUrl);
 });
 
+// Typed client for the Admin API's marketplace endpoints (same Admin API base + auth).
+builder.Services.AddHttpClient<IMarketplaceAdminClient, MarketplaceAdminClient>(httpClient =>
+{
+    string adminApiBaseUrl = builder.Environment.IsDevelopment()
+        ? builder.Configuration.GetRequiredSection("adminApi:baseUrl").Value
+            ?? throw new NullReferenceException("Environment is running in development mode. Please specify the value for 'adminApi:baseUrl' in appsettings.json.")
+        : builder.Configuration.GetRequiredSection(EntraAdminApiOptions.SectionName)?.Get<EntraAdminApiOptions>()?.BaseUrl
+            ?? throw new NullReferenceException($"{nameof(EntraAdminApiOptions)} Url cannot be null");
+
+    httpClient.BaseAddress = new Uri(adminApiBaseUrl);
+});
+
 builder.Services.AddSession(options =>
 {
     options.IdleTimeout = TimeSpan.FromMinutes(10);
