@@ -51,8 +51,17 @@
       ]
     }
   },
+  "marketplace": {
+    "_comment": "Per-product Azure Marketplace inputs (non-secret). The publisher CLIENT SECRET and the marketplace SQL connection string are secrets — provision them out-of-band into App Configuration / Key Vault (Marketplace:PublisherClientSecret, Sql:MarketplaceSQLConnectionString), never here. planToProductTier maps a purchased plan id to this product's internal ProductTier id.",
+    "publisherTenantId": "",
+    "publisherClientId": "",
+    "offerId": "",
+    "saasAppUrl": "",
+    "planToProductTier": {}
+  },
   "azureb2c": {
-    "signedOutCallBackPath": "/signout/B2C_1A_SIGNUP_SIGNIN",
+    "_comment": "LEGACY (B2C/IEF) — no longer provisioned. Workforce multitenant is used now (Instance=login.microsoftonline.com, TenantId=organizations). Only signedOutCallBackPath below is still read; the policy/IEF entries are inert and kept to avoid churn in the untested deploy pipeline.",
+    "signedOutCallBackPath": "/signout-callback-oidc",
     "signUpSignInPolicyId": "B2C_1A_SIGNUP_SIGNIN",
     "policyKeys": [
       {

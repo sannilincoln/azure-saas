@@ -85,9 +85,13 @@ def patch_paramenters_file(
     parameters['parameters'].update(get_output_value(identity_outputs, 'userAssignedIdentityName'))
     parameters['parameters'].update(get_output_value(identity_outputs, 'appConfigurationName'))
     
-    parameters['parameters'].update(get_deploy_b2c_value(config, 'domainName', 'azureB2CDomain'))
-    parameters['parameters'].update(get_deploy_b2c_value(config, 'tenantId', 'azureB2cTenantId'))
-    parameters['parameters'].update(get_deploy_b2c_value(config, 'instance', 'azureAdB2CInstanceURL'))
+    # Workforce multitenant (Phase H): every customer signs in from their own Entra (Azure AD)
+    # tenant, so the authority is the shared multitenant endpoint and TenantId is 'organizations'.
+    # Domain is the publisher's home tenant (used by the Permissions Graph lookup). These are
+    # literals now, which also decouples config generation from B2C/IEF provisioning.
+    parameters['parameters'].update({'azureB2CDomain': {'value': config['entraExternalId']['tenantDomain']}})
+    parameters['parameters'].update({'azureB2cTenantId': {'value': 'organizations'}})
+    parameters['parameters'].update({'azureAdB2CInstanceURL': {'value': 'https://login.microsoftonline.com/'}})
     
     parameters['parameters'].update(get_b2c_value(config, 'signedOutCallBackPath', 'signedOutCallBackPath'))
 

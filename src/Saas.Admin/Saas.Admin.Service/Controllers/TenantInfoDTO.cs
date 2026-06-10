@@ -20,6 +20,7 @@ public class TenantInfoDTO
         Name = Guard.Argument(tenant?.Name, nameof(tenant.Name)).NotEmpty();
         Route = Guard.Argument(tenant?.Route, nameof(tenant.Route)).NotEmpty();
         Version = tenant?.ConcurrencyToken != null ? Convert.ToBase64String(tenant.ConcurrencyToken) : null;
+        SubscriptionStatus = tenant?.SubscriptionStatus;
     }
 
     public Tenant ToTenant()
@@ -47,4 +48,11 @@ public class TenantInfoDTO
     public string Name { get; set; } = string.Empty;
     public string Route { get; set; } = string.Empty;
     public string? Version { get; set; }
+
+    /// <summary>
+    /// Denormalized Azure Marketplace subscription status (Subscribed / Suspended / Unsubscribed /
+    /// PendingFulfillmentStart). Null for tenants not provisioned via a Marketplace purchase. The
+    /// product app reads this to gate access — Suspended/Unsubscribed block.
+    /// </summary>
+    public string? SubscriptionStatus { get; set; }
 }

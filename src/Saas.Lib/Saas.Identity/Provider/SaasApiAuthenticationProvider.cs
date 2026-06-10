@@ -11,7 +11,7 @@ namespace Saas.Identity.Provider;
 
 public class SaasApiAuthenticationProvider<TProvider, TOptions> : DelegatingHandler
     where TProvider : ISaasApi
-    where TOptions : AzureAdB2CBase
+    where TOptions : EntraIdentityOptions
 {
     private readonly ILogger _logger;
 

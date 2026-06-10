@@ -11,8 +11,12 @@
 		<PackageReference Include="Microsoft.AspNetCore.Http" Version="2.2.2" />
 		<PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.0" />
 		<PackageReference Include="Microsoft.AspNetCore.Routing.Abstractions" Version="2.2.0" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="7.0.3" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="7.0.3" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.6" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.6" />
+		<!-- Pin the SQLite provider to the runtime EF Core version. AutoFixture's SQLite customization
+		     otherwise drags in EF Core Sqlite 6.0 transitively, which mismatches Core 8.0.6 and throws
+		     MissingMethodException (ConventionSet.ModelFinalizingConventions) during model build. -->
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.6" />
 		<PackageReference Include="System.ComponentModel.TypeConverter" Version="4.3.0" />
 		<PackageReference Include="AutoFixture.AutoNSubstitute" Version="4.18.0" />
 		<PackageReference Include="AutoFixture.Xunit2" Version="4.18.0" />

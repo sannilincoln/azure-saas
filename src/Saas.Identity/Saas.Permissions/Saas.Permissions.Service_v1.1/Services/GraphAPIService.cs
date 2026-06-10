@@ -10,7 +10,7 @@ using Saas.Shared.Options;
 namespace Saas.Permissions.Service.Services;
 
 public class GraphAPIService(
-    IOptions<AzureB2CPermissionsApiOptions> permissionApiOptions,
+    IOptions<EntraPermissionsApiOptions> permissionApiOptions,
     IGraphApiClientFactory graphClientFactory,
     ILogger<GraphAPIService> logger) : IGraphAPIService
 {
@@ -23,7 +23,7 @@ public class GraphAPIService(
             "Client Assertion Signing Provider");
 
     private readonly GraphServiceClient _graphServiceClient = graphClientFactory.Create();
-    private readonly AzureB2CPermissionsApiOptions _permissionOptions = permissionApiOptions.Value;
+    private readonly EntraPermissionsApiOptions _permissionOptions = permissionApiOptions.Value;
 
     public async Task<string[]> GetAppRolesAsync(ClaimsRequest request)
     {

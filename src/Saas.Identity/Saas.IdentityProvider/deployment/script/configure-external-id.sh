@@ -2,23 +2,30 @@
 #
 # configure-external-id.sh
 #
-# Microsoft Entra External ID replacement for the three Azure AD B2C provisioning
-# steps the kit used to run (create-azure-b2c.sh, config-b2c.sh, upload-ief-policies.sh).
+# Configures the deployment's identity as multitenant Microsoft Entra *Workforce*
+# (Azure AD). This product is sold on Azure Marketplace, so every buyer and user
+# already has an Azure AD tenant and signs in from it — the authority is the common
+# multitenant endpoint (login.microsoftonline.com) and the tenant is 'organizations'.
 #
-# Azure AD B2C is end-of-sale for new subscriptions (2025-05-01), so the kit can no
-# longer create a B2C tenant. Instead, the operator creates an Entra External ID
-# tenant + the app registrations + a user flow MANUALLY in the portal, and this script
-# simply CONSUMES those values: it writes the identity settings the rest of the
-# deployment reads (.deployment.azureb2c.*, appRegistrations[].appId) and stores the
-# web/app client secrets in Key Vault under the app name (same contract config-b2c.sh used).
+# There is NO per-product identity tenant to provision. This replaces both the old
+# Azure AD B2C provisioning (create-azure-b2c.sh, config-b2c.sh, upload-ief-policies.sh)
+# AND the interim Entra External ID (CIAM / ciamlogin.com) authority. The operator
+# registers the app registrations MANUALLY in the portal as *multitenant* apps in the
+# publisher's Azure AD tenant; this script simply CONSUMES those values: it writes the
+# identity settings the rest of the deployment reads (.deployment.azureb2c.*,
+# appRegistrations[].appId) and stores the web/app client secrets in Key Vault under
+# the app name (same Key Vault contract the kit has always used).
 #
-# It does NOT create a tenant, app registrations, custom (IEF) policies, or policy keys —
-# Entra External ID has no custom-policy support, and the registrations already exist.
+# It does NOT create a tenant, app registrations, custom (IEF) policies, or policy keys.
+#
+# NOTE: the .initConfig.entraExternalId.* input keys and the .deployment.azureb2c.*
+# output keys are kept by name to avoid an infra-coupled rename (they are wired through
+# bicep + Key Vault secret references); only their *values* are Workforce now.
 #
 # INPUTS (config.json):
-#   .initConfig.entraExternalId.tenantId        e.g. d03528f1-261a-48bb-8937-2bd959ce9b8e
+#   .initConfig.entraExternalId.tenantId        publisher Azure AD tenant the apps are registered in
 #   .initConfig.entraExternalId.tenantDomain    e.g. edulynkSaas.onmicrosoft.com
-#   .initConfig.entraExternalId.apps            { "<app-name>": "<client/app id>", ... }
+#   .initConfig.entraExternalId.apps            { "<app-name>": "<client/app id>", ... } (multitenant apps)
 #
 # SECRETS (gitignored file, mounted via the config volume — NOT committed):
 #   config/external-id.secrets.json             { "<app-name>": "<client secret>", ... }
@@ -35,20 +42,23 @@ set -u -e -o pipefail
 
 SECRETS_FILE="${CONFIG_DIR}/external-id.secrets.json"
 
-echo "Configuring Microsoft Entra External ID (replaces Azure AD B2C provisioning)." |
+echo "Configuring Microsoft Entra Workforce (multitenant) identity." |
     log-output \
         --level info \
-        --header "Entra External ID"
+        --header "Entra Workforce"
 
 # ----------------------------------------------------------------------------
-# 1. Read the External ID tenant inputs and derive instance/subdomain.
+# 1. Read the identity inputs and set the Workforce (multitenant) authority.
+#    The apps are registered as multitenant in the publisher tenant; sign-in is
+#    accepted from any Azure AD tenant, so the authority is the common endpoint
+#    and the tenant is 'organizations' (NOT a B2C/CIAM ciamlogin.com authority).
 # ----------------------------------------------------------------------------
 tenant_id="$(get-value ".initConfig.entraExternalId.tenantId")"
 tenant_domain="$(get-value ".initConfig.entraExternalId.tenantDomain")"
 
 if [[ -z "${tenant_id}" || "${tenant_id}" == "null" ||
       -z "${tenant_domain}" || "${tenant_domain}" == "null" ]]; then
-    echo "Missing required '.initConfig.entraExternalId.tenantId' and/or '.tenantDomain' in ${CONFIG_FILE}." |
+    echo "Missing required '.initConfig.entraExternalId.tenantId' (publisher tenant) and/or '.tenantDomain' in ${CONFIG_FILE}." |
         log-output \
             --level error \
             --header "Critical Error"
@@ -58,13 +68,18 @@ fi
 # Subdomain is the tenant domain without the '.onmicrosoft.com' suffix.
 tenant_name="${tenant_domain%%.onmicrosoft.com}"
 
-# Entra External ID (CIAM) authority host is <subdomain>.ciamlogin.com (NOT b2clogin.com).
-instance="https://${tenant_name}.ciamlogin.com/"
+# Workforce multitenant authority — the common endpoint, NOT a per-tenant
+# ciamlogin.com (CIAM) or b2clogin.com (B2C) host.
+instance="https://login.microsoftonline.com/"
 
-echo "Tenant: ${tenant_domain} (${tenant_id}). Authority: ${instance}" |
+echo "Workforce identity for ${tenant_domain} (apps registered in publisher tenant ${tenant_id})." |
+    log-output --level info
+echo "Authority: ${instance} (multitenant; tenant 'organizations')." |
     log-output --level info
 
 # Mirror the values into the .deployment.azureb2c.* keys the downstream modules read.
+# tenantId stays the publisher (app-home) tenant; the runtime config emitters set the
+# multitenant 'organizations' value independently (see map-to-config-entries-parameters.py).
 put-value ".deployment.azureb2c.name" "${tenant_name}"
 put-value ".deployment.azureb2c.domainName" "${tenant_domain}"
 put-value ".deployment.azureb2c.tenantId" "${tenant_id}"
@@ -152,7 +167,7 @@ while IFS= read -r app_name; do
     echo "  secret stored for ${app_name}" | log-output --level success
 done <<< "${secret_app_names}"
 
-echo "Entra External ID configuration complete." |
+echo "Entra Workforce identity configuration complete." |
     log-output \
         --level success \
-        --header "Entra External ID"
+        --header "Entra Workforce"

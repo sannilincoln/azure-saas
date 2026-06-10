@@ -99,9 +99,13 @@ def patch_paramenters_file(
     parameters['parameters'].update(get_output_value(identity_outputs, 'version'))
     parameters['parameters'].update(get_output_value(identity_outputs, 'keyVaultName'))
     
-    parameters['parameters'].update(get_deploy_b2c_value(config, 'domainName', 'azureB2CDomain'))
-    parameters['parameters'].update(get_deploy_b2c_value(config, 'tenantId', 'azureB2cTenantId'))
-    parameters['parameters'].update(get_deploy_b2c_value(config, 'instance', 'azureAdB2CInstanceURL'))
+    # Workforce multitenant (Phase H): every customer signs in from their own Entra (Azure AD)
+    # tenant, so the authority is the shared multitenant endpoint and TenantId is 'organizations'.
+    # Domain is the publisher's home tenant (used by the Permissions Graph lookup). These are
+    # literals now, which also decouples config generation from B2C/IEF provisioning.
+    parameters['parameters'].update({'azureB2CDomain': {'value': config['entraExternalId']['tenantDomain']}})
+    parameters['parameters'].update({'azureB2cTenantId': {'value': 'organizations'}})
+    parameters['parameters'].update({'azureAdB2CInstanceURL': {'value': 'https://login.microsoftonline.com/'}})
 
     parameters['parameters'].update(get_b2c_value(config, 'signedOutCallBackPath', 'signedOutCallBackPath'))
 
@@ -117,6 +121,16 @@ def patch_paramenters_file(
     parameters['parameters'].update(get_claimTransformer_value(config, 'authenticationType', 'authenticationType'))
     parameters['parameters'].update(get_claimTransformer_value(config, 'roleClaimType', 'roleClaimType'))
     parameters['parameters'].update(get_claimTransformer_value(config, 'sourceClaimType', 'sourceClaimType'))
+
+    # Azure Marketplace (non-secret) per-product inputs. Absent/empty -> bicep param defaults,
+    # leaving the marketplace feature inert until these keys (and the out-of-band secrets,
+    # Marketplace:PublisherClientSecret + Sql:MarketplaceSQLConnectionString) are provisioned.
+    marketplace = config.get('marketplace', {})
+    parameters['parameters'].update({'marketplacePublisherTenantId': {'value': marketplace.get('publisherTenantId', '')}})
+    parameters['parameters'].update({'marketplacePublisherClientId': {'value': marketplace.get('publisherClientId', '')}})
+    parameters['parameters'].update({'marketplaceOfferId': {'value': marketplace.get('offerId', '')}})
+    parameters['parameters'].update({'marketplaceSaaSAppUrl': {'value': marketplace.get('saasAppUrl', '')}})
+    parameters['parameters'].update({'marketplacePlanToProductTier': {'value': json.dumps(marketplace.get('planToProductTier', {}))}})
 
     with open(paramenter_file, 'w') as f:
         f.write(json.dumps(parameters, indent=4))

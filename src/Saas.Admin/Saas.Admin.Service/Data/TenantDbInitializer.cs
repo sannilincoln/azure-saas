@@ -1,4 +1,6 @@
-﻿namespace Saas.Admin.Service.Data;
+﻿using Marketplace.SaaS.Accelerator.DataAccess.Context;
+
+namespace Saas.Admin.Service.Data;
 
 public static class TenantDbInitializer
 {
@@ -11,6 +13,27 @@ public static class TenantDbInitializer
 
         CreateDatabase(tenantsContext, logger);
         SeedDatabase(tenantsContext, logger);
+
+        // Migrate the marketplace store too, when it's registered (a marketplace connection
+        // string is configured). Uses the vendored accelerator's own migration history.
+        SaasKitContext? marketplaceContext = scope.ServiceProvider.GetService<SaasKitContext>();
+        if (marketplaceContext is not null)
+        {
+            CreateMarketplaceDatabase(marketplaceContext, logger);
+        }
+    }
+
+    private static void CreateMarketplaceDatabase(SaasKitContext marketplaceContext, ILogger logger)
+    {
+        try
+        {
+            marketplaceContext.Database.Migrate();
+        }
+        catch (Exception ex)
+        {
+            logger.LogCritical(ex, "Unable to create the marketplace database");
+            throw;
+        }
     }
 
     private static void CreateDatabase(TenantsContext tenantsContext, ILogger logger)

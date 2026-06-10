@@ -1,0 +1,124 @@
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Threading;
+using Microsoft.Extensions.Options;
+using Microsoft.Identity.Web;
+using Saas.Shared.Options;
+
+namespace Saas.SignupAdministration.Web.Services;
+
+public interface IMarketplaceAdminClient
+{
+    Task<ResolvedSubscription> ResolveAsync(string token);
+    Task ActivateAsync(Guid subscriptionId, Guid tenantId);
+
+    /// <summary>All subscriptions — backs the publisher console (Admin API enforces publisher-only).</summary>
+    Task<IReadOnlyList<SubscriptionInfo>> GetAllSubscriptionsAsync();
+
+    /// <summary>The caller's own subscriptions — backs customer self-service (Admin API filters by tid).</summary>
+    Task<IReadOnlyList<SubscriptionInfo>> GetMySubscriptionsAsync();
+
+    /// <summary>Re-pull live state from Microsoft (publisher console).</summary>
+    Task<SubscriptionInfo?> RefreshSubscriptionAsync(Guid subscriptionId);
+
+    /// <summary>Administratively override a subscription's status (publisher console).</summary>
+    Task<SubscriptionInfo?> OverrideSubscriptionStatusAsync(Guid subscriptionId, string status);
+}
+
+public record ResolvedSubscription(
+    Guid SubscriptionId,
+    string? SubscriptionName,
+    string? OfferId,
+    string? PlanId,
+    int Quantity,
+    int ProductTierId);
+
+public record SubscriptionInfo(
+    Guid SubscriptionId,
+    string? Name,
+    string? OfferId,
+    string? PlanId,
+    int Quantity,
+    string? Status,
+    string? PurchaserEmail,
+    Guid? CustomerTenantId,
+    Guid? TenantId,
+    string? TenantName,
+    DateTime? CreatedTime);
+
+/// <summary>
+/// Thin typed client over the Admin API's marketplace endpoints. Reuses <see cref="OAuthBaseClient"/>
+/// so the signed-in user's bearer token is attached exactly like the generated AdminServiceClient —
+/// the marketplace endpoints live on the same Admin API audience/scopes.
+/// </summary>
+public class MarketplaceAdminClient(
+    HttpClient httpClient,
+    ITokenAcquisition tokenAcquisition,
+    IOptions<SaasAppScopeOptions> scopes) : OAuthBaseClient(tokenAcquisition, scopes), IMarketplaceAdminClient
+{
+    public async Task<ResolvedSubscription> ResolveAsync(string token)
+    {
+        using var request = await CreateHttpRequestMessageAsync(CancellationToken.None);
+        request.Method = HttpMethod.Post;
+        request.RequestUri = new Uri("api/marketplace/resolve", UriKind.Relative);
+        request.Content = JsonContent.Create(new { token });
+
+        using var response = await httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<ResolvedSubscription>()
+            ?? throw new InvalidOperationException("Admin API returned an empty resolve response.");
+    }
+
+    public async Task ActivateAsync(Guid subscriptionId, Guid tenantId)
+    {
+        using var request = await CreateHttpRequestMessageAsync(CancellationToken.None);
+        request.Method = HttpMethod.Post;
+        request.RequestUri = new Uri($"api/marketplace/{subscriptionId}/activate", UriKind.Relative);
+        request.Content = JsonContent.Create(new { tenantId });
+
+        using var response = await httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public Task<IReadOnlyList<SubscriptionInfo>> GetAllSubscriptionsAsync() =>
+        GetListAsync("api/marketplace/subscriptions");
+
+    public Task<IReadOnlyList<SubscriptionInfo>> GetMySubscriptionsAsync() =>
+        GetListAsync("api/marketplace/subscriptions/mine");
+
+    public Task<SubscriptionInfo?> RefreshSubscriptionAsync(Guid subscriptionId) =>
+        PostForSubscriptionAsync($"api/marketplace/subscriptions/{subscriptionId}/refresh", content: null);
+
+    public Task<SubscriptionInfo?> OverrideSubscriptionStatusAsync(Guid subscriptionId, string status) =>
+        PostForSubscriptionAsync($"api/marketplace/subscriptions/{subscriptionId}/status", new { status });
+
+    private async Task<IReadOnlyList<SubscriptionInfo>> GetListAsync(string relativeUri)
+    {
+        using var request = await CreateHttpRequestMessageAsync(CancellationToken.None);
+        request.Method = HttpMethod.Get;
+        request.RequestUri = new Uri(relativeUri, UriKind.Relative);
+
+        using var response = await httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<List<SubscriptionInfo>>()
+            ?? new List<SubscriptionInfo>();
+    }
+
+    private async Task<SubscriptionInfo?> PostForSubscriptionAsync(string relativeUri, object? content)
+    {
+        using var request = await CreateHttpRequestMessageAsync(CancellationToken.None);
+        request.Method = HttpMethod.Post;
+        request.RequestUri = new Uri(relativeUri, UriKind.Relative);
+        if (content is not null)
+        {
+            request.Content = JsonContent.Create(content);
+        }
+
+        using var response = await httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<SubscriptionInfo>();
+    }
+}

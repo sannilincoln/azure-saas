@@ -43,6 +43,21 @@ param applicationIdUri string
 @description('Admin API scopes.')
 param adminApiScopes string
 
+@description('Azure Marketplace publisher (offer Technical Configuration) Entra tenant id.')
+param marketplacePublisherTenantId string = ''
+
+@description('Azure Marketplace publisher service-principal client id.')
+param marketplacePublisherClientId string = ''
+
+@description('Azure Marketplace offer id this deployment serves.')
+param marketplaceOfferId string = ''
+
+@description('URL customers are sent to after onboarding completes (the running SaaS app).')
+param marketplaceSaaSAppUrl string = ''
+
+@description('JSON object mapping a purchased plan id to the internal ProductTier id.')
+param marketplacePlanToProductTier string = '{}'
+
 resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2022-01-31-preview' existing = {
   name: userAssignedIdentityName
 }
@@ -52,6 +67,7 @@ resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@
 var azureB2CKeyName = 'AzureB2C'
 var adminApiKeyName = 'AdminApi'
 var claimToRoleTransformerKeyName = 'ClaimToRoleTransformer'
+var marketplaceKeyName = 'Marketplace'
 
 @description('Time, Now')
 param now string = utcNow()
@@ -139,6 +155,39 @@ var appConfigStore = {
     {
       key: '${adminApiKeyName}:Scopes'
       value: ' ${string(adminApiScopes)}' // notice the space before the string, this is a necessary hack. https://github.com/Azure/bicep/issues/6167
+      isSecret: false
+      contentType: 'application/json'
+    }
+    // Azure Marketplace fulfillment (non-secret). The publisher CLIENT SECRET and the marketplace
+    // SQL connection string are provisioned out-of-band (Marketplace:PublisherClientSecret,
+    // Sql:MarketplaceSQLConnectionString); the marketplace feature stays inert until they exist.
+    {
+      key: '${marketplaceKeyName}:PublisherTenantId'
+      value: marketplacePublisherTenantId
+      isSecret: false
+      contentType: 'text/plain'
+    }
+    {
+      key: '${marketplaceKeyName}:PublisherClientId'
+      value: marketplacePublisherClientId
+      isSecret: false
+      contentType: 'text/plain'
+    }
+    {
+      key: '${marketplaceKeyName}:OfferId'
+      value: marketplaceOfferId
+      isSecret: false
+      contentType: 'text/plain'
+    }
+    {
+      key: '${marketplaceKeyName}:SaaSAppUrl'
+      value: marketplaceSaaSAppUrl
+      isSecret: false
+      contentType: 'text/plain'
+    }
+    {
+      key: '${marketplaceKeyName}:PlanToProductTier'
+      value: ' ${marketplacePlanToProductTier}' // leading space hack (see Scopes above) for JSON values
       isSecret: false
       contentType: 'application/json'
     }

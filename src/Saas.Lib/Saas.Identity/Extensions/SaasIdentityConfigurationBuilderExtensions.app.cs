@@ -20,8 +20,9 @@ public static partial class SaasIdentityConfigurationBuilderExtensions
         services.Configure<SaasAppScopeOptions>(saasAppScopeOptions =>
             saasAppScopeOptions.Scopes = scopes.ToArray());
 
-        // Entra External ID: map the 'oid' claim into NameIdentifier (B2C used to put
-        // the object-id GUID in 'sub'/NameIdentifier; External ID does not). Also kept
+        // Microsoft Entra (Workforce): map the 'oid' claim into NameIdentifier. The app
+        // reads NameIdentifier as the directory object-id GUID, but Entra puts that in
+        // 'oid' (the 'sub' claim is a pairwise per-app identifier, not a GUID). Also kept
         // as an IClaimsTransformation for the bearer-token (API) path. See
         // NameIdentifierClaimsTransformation.
         services.AddScoped<IClaimsTransformation, NameIdentifierClaimsTransformation>();
@@ -32,8 +33,9 @@ public static partial class SaasIdentityConfigurationBuilderExtensions
                 configuration.Bind(configSectionName, options);
             });
 
-        // For the interactive web-app sign-in, map 'oid' -> NameIdentifier at token
-        // validation so the object-id GUID is persisted into the auth cookie. PostConfigure
+        // For the interactive web-app sign-in (multitenant Workforce), map 'oid' ->
+        // NameIdentifier at token validation so the object-id GUID is persisted into the
+        // auth cookie. PostConfigure
         // runs after Microsoft.Identity.Web wires its own events, so we chain rather than
         // replace OnTokenValidated.
         services.PostConfigure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options =>

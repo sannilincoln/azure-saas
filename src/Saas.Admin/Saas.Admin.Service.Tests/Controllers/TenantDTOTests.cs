@@ -10,7 +10,7 @@ public class TenantDTOTests
         dto.Version = Convert.ToBase64String(versionBytes);
         Tenant tenant = dto.ToTenant();
 
-        AssertAdditions.AllPropertiesAreEqual(tenant, dto, nameof(tenant.ConcurrencyToken), nameof(tenant.CreatedTime));
+        AssertAdditions.AllPropertiesAreEqual(tenant, dto, nameof(tenant.ConcurrencyToken), nameof(tenant.CreatedTime), nameof(tenant.SubscriptionId), nameof(tenant.SubscriptionStatus));
     }
 
     [Theory, AutoDataNSubstitute]
@@ -47,7 +47,7 @@ public class TenantDTOTests
 
         fromUser.CopyTo(fromDb);
 
-        AssertAdditions.AllPropertiesAreEqual(fromDb, fromUser, nameof(fromDb.ConcurrencyToken), nameof(fromDb.CreatedTime));
+        AssertAdditions.AllPropertiesAreEqual(fromDb, fromUser, nameof(fromDb.ConcurrencyToken), nameof(fromDb.CreatedTime), nameof(fromDb.SubscriptionId), nameof(fromDb.SubscriptionStatus));
     }
 
     [Theory, AutoDataNSubstitute]

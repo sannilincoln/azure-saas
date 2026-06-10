@@ -217,17 +217,19 @@ put-value ".deployment.keyVault.provisionState" "provioning"
             exit 1
     )
 
-echo "Configuring Microsoft Entra External ID..." |
+echo "Configuring Microsoft Entra Workforce (multitenant) identity..." |
     log-output \
         --level info \
-        --header "Entra External ID"
+        --header "Entra Workforce"
 
 put-value ".deployment.azureb2c.provisionState" "provisioning"
-# Azure AD B2C is end-of-sale for new subscriptions (2025-05-01). Instead of creating a
-# B2C tenant + app registrations + custom (IEF) policies, we consume a pre-created
-# Entra External ID tenant and its manually-registered apps. configure-external-id.sh
-# writes the identity settings the rest of the deployment reads and stores the client
-# secrets in Key Vault. (Replaces create-azure-b2c.sh, config-b2c.sh, upload-ief-policies.sh.)
+# Identity is multitenant Microsoft Entra Workforce (Azure AD): every buyer/user signs in
+# from their own Azure AD tenant, so there is NO per-product identity tenant to provision
+# (no B2C tenant, no Entra External ID / CIAM tenant). The operator registers the apps
+# MANUALLY as multitenant in the publisher tenant; configure-external-id.sh consumes those
+# values, sets the Workforce authority, and stores the client secrets in Key Vault.
+# (Replaces create-azure-b2c.sh, config-b2c.sh, upload-ief-policies.sh, and the interim
+# Entra External ID provisioning.)
 (
     "${SCRIPT_DIR}/configure-external-id.sh" &&
         put-value ".deployment.azureb2c.provisionState" "successful" &&
@@ -235,7 +237,7 @@ put-value ".deployment.azureb2c.provisionState" "provisioning"
 ) ||
     (
         put-value ".deployment.azureb2c.provisionState" "failed" &&
-            echo "Configuration of Entra External ID failed." |
+            echo "Configuration of Entra Workforce identity failed." |
             log-output \
                 --level error \
                 --header "Critical error" ||

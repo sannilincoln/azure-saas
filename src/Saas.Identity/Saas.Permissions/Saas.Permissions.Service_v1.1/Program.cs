@@ -56,8 +56,8 @@ else
 builder.Services.Configure<PermissionsApiOptions>(
         builder.Configuration.GetRequiredSection(PermissionsApiOptions.SectionName));
 
-builder.Services.Configure<AzureB2CPermissionsApiOptions>(
-        builder.Configuration.GetRequiredSection(AzureB2CPermissionsApiOptions.SectionName));
+builder.Services.Configure<EntraPermissionsApiOptions>(
+        builder.Configuration.GetRequiredSection(EntraPermissionsApiOptions.SectionName));
 
 builder.Services.Configure<SqlOptions>(
             builder.Configuration.GetRequiredSection(SqlOptions.SectionName));
@@ -78,7 +78,7 @@ builder.Services.AddDbContext<SaasPermissionsContext>(options =>
 });
 
 builder.Services
-    .AddSaasApiCertificateClientCredentials<ISaasMicrosoftGraphApi, AzureB2CPermissionsApiOptions>()
+    .AddSaasApiCertificateClientCredentials<ISaasMicrosoftGraphApi, EntraPermissionsApiOptions>()
     .AddMicrosoftGraphAuthenticationProvider()
     .AddHttpClient<IGraphApiClientFactory, GraphApiClientFactory>()
     .AddTransientHttpErrorPolicy(builder =>

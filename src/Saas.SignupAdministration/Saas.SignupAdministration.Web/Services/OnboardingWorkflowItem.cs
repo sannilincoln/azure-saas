@@ -35,6 +35,15 @@ public class OnboardingWorkflowItem
     [JsonProperty(PropertyName = SR.OnboardingWorkflowTenantRouteNameProperty)]
     public string TenantRouteName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Set when onboarding originated from an Azure Marketplace purchase. Carries the resolved
+    /// subscription id through the wizard so we can activate + link it once the tenant is created.
+    /// The subscription itself is persisted server-side on resolve, so this is a convenience, not
+    /// the source of truth.
+    /// </summary>
+    [JsonProperty(PropertyName = "subscriptionId")]
+    public Guid? SubscriptionId { get; set; }
+
     [JsonProperty(PropertyName = SR.OnboardingWorkflowIsActiveProperty)]
     public bool IsActive { get; set; }
 

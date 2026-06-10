@@ -9,6 +9,8 @@ using Saas.Identity.Authorization.Option;
 using Saas.Identity.Authorization.Provider;
 using Saas.Permissions.Client;
 using Saas.Shared.Options;
+using Saas.Admin.Service.Fulfillment;
+using Marketplace.SaaS.Accelerator.DataAccess.Context;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddApplicationInsightsTelemetry();
@@ -46,11 +48,11 @@ else
     InitializeProdEnvironment();
 }
 
-builder.Services.Configure<AzureB2CAdminApiOptions>(
-        builder.Configuration.GetRequiredSection(AzureB2CAdminApiOptions.SectionName));
+builder.Services.Configure<EntraAdminApiOptions>(
+        builder.Configuration.GetRequiredSection(EntraAdminApiOptions.SectionName));
 
-builder.Services.Configure<AzureB2CPermissionsApiOptions>(
-        builder.Configuration.GetRequiredSection(AzureB2CPermissionsApiOptions.SectionName));
+builder.Services.Configure<EntraPermissionsApiOptions>(
+        builder.Configuration.GetRequiredSection(EntraPermissionsApiOptions.SectionName));
 
 builder.Services.Configure<PermissionsApiOptions>(
         builder.Configuration.GetRequiredSection(PermissionsApiOptions.SectionName));
@@ -64,7 +66,7 @@ builder.Services.Configure<SaasAuthorizationOptions>(
 builder.Services.AddHttpContextAccessor();
 
 // Add authentication for incoming requests
-builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration, AzureB2CAdminApiOptions.SectionName);
+builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration, EntraAdminApiOptions.SectionName);
 
 // Entra External ID: a single IClaimsTransformation that (1) maps the 'oid' claim into
 // NameIdentifier so the authorization handlers (which read ClaimTypes.NameIdentifier as a
@@ -92,7 +94,7 @@ builder.Services.AddHttpClient<IPermissionsServiceClient, PermissionsServiceClie
     {
         using var scope = serviceProvider.CreateScope();
 
-        var baseUrl = scope.ServiceProvider.GetRequiredService<IOptions<AzureB2CPermissionsApiOptions>>().Value.BaseUrl
+        var baseUrl = scope.ServiceProvider.GetRequiredService<IOptions<EntraPermissionsApiOptions>>().Value.BaseUrl
             ?? throw new NullReferenceException("Permissions Base Url cannot be null");
 
         var apiKey = scope.ServiceProvider.GetRequiredService<IOptions<PermissionsApiOptions>>().Value.ApiKey
@@ -112,6 +114,29 @@ builder.Services.AddDbContext<TenantsContext>(options =>
 
     options.UseSqlServer(sqlConnectionString);
 });
+
+// Default seat guard: enforces nothing until the marketplace feature is configured below. The
+// real implementation is registered last inside the guard so it wins the single-resolve.
+builder.Services.AddScoped<IMarketplaceSeatService, NoopMarketplaceSeatService>();
+
+// Azure Marketplace fulfillment store — the vendored accelerator SaasKitContext. Registered
+// only when a marketplace connection string is configured, so the Admin API keeps working in
+// environments that don't yet have the marketplace database provisioned (added in Phase H).
+var marketplaceConnectionString = builder.Configuration.GetRequiredSection(SqlOptions.SectionName)
+    .Get<SqlOptions>()?.MarketplaceSQLConnectionString;
+
+if (!string.IsNullOrWhiteSpace(marketplaceConnectionString))
+{
+    builder.Services.AddDbContext<SaasKitContext>(options =>
+        options.UseSqlServer(marketplaceConnectionString));
+
+    // Fulfillment client (publisher service principal) + resolve/activate glue. Registered
+    // alongside the marketplace DB so the feature is all-or-nothing per environment.
+    builder.Services.AddMarketplaceFulfillment(builder.Configuration);
+
+    // Real per-seat enforcement (overrides the no-op above for this environment).
+    builder.Services.AddScoped<IMarketplaceSeatService, MarketplaceSeatService>();
+}
 
 var app = builder.Build();
 

@@ -83,6 +83,16 @@ public class OnboardingWorkflowController : Controller
         }
 
         _onboardingWorkflow.OnboardingWorkflowItem.TenantRouteName = tenantRouteName;
+
+        // Marketplace-originated onboarding: the plan (tier) was already chosen on Azure and is
+        // pre-set on the workflow item, so skip the in-app service-plan step and go straight to
+        // deployment. The state machine has a direct TenantRouteName -> deployment transition.
+        if (_onboardingWorkflow.OnboardingWorkflowItem.SubscriptionId is not null)
+        {
+            UpdateOnboardingSessionAndTransitionState(OnboardingWorkflowState.Triggers.OnServicePlanPosted);
+            return RedirectToAction(SR.ConfirmationAction, SR.OnboardingWorkflowController);
+        }
+
         UpdateOnboardingSessionAndTransitionState(OnboardingWorkflowState.Triggers.OnTenantRouteNamePosted);
 
         return RedirectToAction(SR.ServicePlansAction, SR.OnboardingWorkflowController);

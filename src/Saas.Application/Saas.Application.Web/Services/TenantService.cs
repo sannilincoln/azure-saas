@@ -24,10 +24,11 @@ public class TenantService : ITenantService
             tenant = await _adminServiceClient.TenantinfoAsync(route);
         }
 
-        return new TenantViewModel() 
-        { 
-            Id = tenant?.Id ?? Guid.Empty, 
-            Name = tenant?.Name ?? "Unknown" 
+        return new TenantViewModel()
+        {
+            Id = tenant?.Id ?? Guid.Empty,
+            Name = tenant?.Name ?? "Unknown",
+            SubscriptionStatus = tenant?.SubscriptionStatus
         };
     }
 }

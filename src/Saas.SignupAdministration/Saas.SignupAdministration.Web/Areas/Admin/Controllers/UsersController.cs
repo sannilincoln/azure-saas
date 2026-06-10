@@ -65,6 +65,12 @@ public class UsersController : Controller
             {
                 await _adminServiceClient.InviteAsync(userTenantId, addUserRequest.UserEmail);
             }
+            catch (ApiException ex) when (ex.StatusCode == StatusCodes.Status409Conflict)
+            {
+                // Seat limit reached — show the reason on the form rather than a generic 404.
+                ModelState.AddModelError(string.Empty, ex.Response ?? "The subscription seat limit has been reached.");
+                return View(addUserRequest);
+            }
             catch (ApiException)
             {
                 return NotFound();
