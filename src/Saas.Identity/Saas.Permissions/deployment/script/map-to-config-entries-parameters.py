@@ -107,7 +107,7 @@ def patch_paramenters_file(
     # tenant, so the authority is the shared multitenant endpoint and TenantId is 'organizations'.
     # Domain is the publisher's home tenant (used by the Permissions Graph lookup). These are
     # literals now, which also decouples config generation from B2C/IEF provisioning.
-    parameters['parameters'].update({'azureB2CDomain': {'value': config['entraExternalId']['tenantDomain']}})
+    parameters['parameters'].update({'azureB2CDomain': {'value': config['initConfig']['entraExternalId']['tenantDomain']}})
     parameters['parameters'].update({'azureB2cTenantId': {'value': 'organizations'}})
     parameters['parameters'].update({'azureAdB2CInstanceURL': {'value': 'https://login.microsoftonline.com/'}})
     
