@@ -26,9 +26,9 @@ public partial class TenantViewModel
         Route = tenantDTO.Route;
         CreatorEmail = tenantDTO.CreatorEmail;
         ProductTierId = tenantDTO.ProductTierId;
-        ProductName = products.ElementAtOrDefault(tenantDTO.ProductTierId - 1)?.Name ?? "Free";
+        ProductName = products.FirstOrDefault(p => p.Id == tenantDTO.ProductTierId)?.Name ?? "Free";
         CategoryId = tenantDTO.CategoryId;
-        CategoryName = categories.ElementAtOrDefault(tenantDTO.CategoryId - 1)?.Name ?? "Unknown";
+        CategoryName = categories.FirstOrDefault(c => c.Id == tenantDTO.CategoryId)?.Name ?? "Unknown";
         Version = tenantDTO.Version;
     }
 }
