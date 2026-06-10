@@ -23,7 +23,6 @@ public class ReferenceData
 
     public static List<IdNameReferenceItem> ProductServicePlans = new()
     {
-        new IdNameReferenceItem { Id = 5, Name = SR.FreePlan },
         new IdNameReferenceItem { Id = 6, Name = SR.BasicPlan },
         new IdNameReferenceItem { Id = 7, Name = SR.StandardPlan },
         new IdNameReferenceItem { Id = 8, Name = SR.PremiumPlan },
