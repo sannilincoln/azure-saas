@@ -24,6 +24,7 @@ public static class SR
     public const string FreePlan = "Free";
     public const string BasicPlan = "Basic";
     public const string StandardPlan = "Standard";
+    public const string PremiumPlan = "Premium";
 
     // API Route Template
     public const string ApiRouteTemplate = "api/[controller]";
