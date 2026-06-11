@@ -1,0 +1,43 @@
+# Shared deploy template for the 4 ASDK app pipelines.
+# Build + publish a single project and deploy the zip to its (Linux) Azure App Service.
+# Consumed via `extends:` from the thin per-app pipelines in .azuredevops/.
+parameters:
+  - name: webAppName
+    type: string
+  - name: projectPath
+    type: string
+  - name: azureSubscription   # ARM service connection name (Workload Identity Federation)
+    type: string
+  - name: outputName          # staging subfolder for the published zip
+    type: string
+
+jobs:
+  - job: build_and_deploy
+    displayName: Build & deploy ${{ parameters.webAppName }}
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+      - checkout: self
+
+      - task: UseDotNet@2
+        displayName: Install .NET SDK 8.x
+        inputs:
+          packageType: sdk
+          version: 8.x
+
+      - task: DotNetCoreCLI@2
+        displayName: Publish ${{ parameters.projectPath }}
+        inputs:
+          command: publish
+          publishWebProjects: false
+          projects: ${{ parameters.projectPath }}
+          arguments: '--configuration Release --output $(Build.ArtifactStagingDirectory)/${{ parameters.outputName }}'
+          zipAfterPublish: true
+
+      - task: AzureWebApp@1
+        displayName: Deploy to ${{ parameters.webAppName }}
+        inputs:
+          azureSubscription: ${{ parameters.azureSubscription }}
+          appType: webAppLinux
+          appName: ${{ parameters.webAppName }}
+          package: '$(Build.ArtifactStagingDirectory)/${{ parameters.outputName }}/**/*.zip'

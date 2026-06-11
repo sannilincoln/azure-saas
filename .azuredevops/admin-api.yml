@@ -1,0 +1,26 @@
+# Admin API — deploy to admin-api-asdk-test-x16w
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - src/Saas.Admin/Saas.Admin.Service/**
+      - src/Saas.Marketplace/**
+      - src/Saas.Identity/Saas.Permissions/Saas.Permissions.Client/**
+      - src/Saas.Lib/Saas.Identity/**
+      - src/Saas.Lib/Saas.Shared/**
+      - .azuredevops/admin-api.yml
+      - .azuredevops/templates/deploy-app.yml
+
+variables:
+  # Name of the ARM service connection (Workload Identity Federation) created in ADO.
+  azureSubscription: 'asdk-azure'
+
+extends:
+  template: templates/deploy-app.yml
+  parameters:
+    webAppName: admin-api-asdk-test-x16w
+    projectPath: src/Saas.Admin/Saas.Admin.Service/Saas.Admin.Service.csproj
+    azureSubscription: $(azureSubscription)
+    outputName: admin-api

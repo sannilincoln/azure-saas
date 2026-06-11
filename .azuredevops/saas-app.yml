@@ -1,0 +1,25 @@
+# SaaS App — deploy to saas-app-asdk-test-x16w
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - src/Saas.Application/Saas.Application.Web/**
+      - src/Saas.Admin/Saas.Admin.Client/**
+      - src/Saas.Lib/Saas.Identity/**
+      - src/Saas.Lib/Saas.Shared/**
+      - .azuredevops/saas-app.yml
+      - .azuredevops/templates/deploy-app.yml
+
+variables:
+  # Name of the ARM service connection (Workload Identity Federation) created in ADO.
+  azureSubscription: 'asdk-azure'
+
+extends:
+  template: templates/deploy-app.yml
+  parameters:
+    webAppName: saas-app-asdk-test-x16w
+    projectPath: src/Saas.Application/Saas.Application.Web/Saas.Application.Web.csproj
+    azureSubscription: $(azureSubscription)
+    outputName: saas-app
