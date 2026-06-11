@@ -12,6 +12,7 @@ public class MarketplaceFulfillmentService(
     IFulfillmentApiService fulfillmentApi,
     SaasKitContext marketplaceDb,
     TenantsContext tenantsDb,
+    IMarketplaceNotificationService notifications,
     IOptions<MarketplaceOptions> marketplaceOptions,
     ILogger<MarketplaceFulfillmentService> logger) : IMarketplaceFulfillmentService
 {
@@ -94,6 +95,18 @@ public class MarketplaceFulfillmentService(
 
         logger.LogInformation("Activated marketplace subscription {SubscriptionId} and linked it to tenant {TenantId}.",
             subscriptionId, tenantId);
+
+        // Best-effort: tell the publisher a tenant just signed up. This never throws (the activation
+        // itself is already committed; an email hiccup must not fail the customer's onboarding).
+        await notifications.NotifySubscriptionActivatedAsync(new SubscriptionActivatedNotice(
+            SubscriptionId: subscriptionId,
+            SubscriptionName: subscription.Name,
+            OfferId: subscription.AmpOfferId,
+            PlanId: subscription.AmpplanId,
+            Quantity: subscription.Ampquantity,
+            TenantName: tenant.Name,
+            TenantRoute: tenant.Route,
+            CustomerEmail: tenant.CreatorEmail));
     }
 
     /// <summary>

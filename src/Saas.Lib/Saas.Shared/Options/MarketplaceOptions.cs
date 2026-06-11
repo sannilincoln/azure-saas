@@ -29,4 +29,40 @@ public record MarketplaceOptions
     /// A plan not present in the map resolves to tier 0 (the default/unmapped tier).
     /// </summary>
     public Dictionary<string, int>? PlanToProductTier { get; init; }
+
+    /// <summary>
+    /// Optional email-notification settings. When enabled, the publisher is emailed on key
+    /// subscription events — currently a new subscription activating (i.e. a tenant signing up).
+    /// Disabled and inert unless <see cref="MarketplaceNotificationOptions.Enabled"/> is set.
+    /// </summary>
+    public MarketplaceNotificationOptions? Notifications { get; init; }
+}
+
+/// <summary>
+/// SMTP + recipient settings for marketplace publisher notifications. Bound from
+/// <c>Marketplace:Notifications:*</c>. <see cref="SmtpPassword"/> should be supplied as a Key Vault
+/// reference in App Config, never a literal.
+/// </summary>
+public record MarketplaceNotificationOptions
+{
+    /// <summary>Master switch. When false (default) no email is ever sent.</summary>
+    public bool Enabled { get; init; }
+
+    public string? SmtpHost { get; init; }
+    public int SmtpPort { get; init; } = 587;
+    public bool SmtpUseSsl { get; init; } = true;
+    public string? SmtpUsername { get; init; }
+    public string? SmtpPassword { get; init; }
+
+    /// <summary>From address on the notification email.</summary>
+    public string? FromEmail { get; init; }
+
+    /// <summary>
+    /// Publisher recipients — the mailbox(es) notified when a tenant signs up. Semicolon- or
+    /// comma-separated, e.g. "ops@lagetronix.com;sales@lagetronix.com".
+    /// </summary>
+    public string? ToEmails { get; init; }
+
+    /// <summary>Also CC the customer who onboarded (the new tenant's creator email).</summary>
+    public bool CopyToCustomer { get; init; }
 }

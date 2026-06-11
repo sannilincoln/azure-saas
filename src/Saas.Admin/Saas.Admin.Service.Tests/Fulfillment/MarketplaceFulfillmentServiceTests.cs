@@ -17,8 +17,8 @@ public class MarketplaceFulfillmentServiceTests
         MarketplaceOptions options,
         Marketplace.SaaS.Accelerator.DataAccess.Context.SaasKitContext marketplace,
         Saas.Admin.Service.Data.TenantsContext tenants) =>
-        new(fulfillment, marketplace, tenants, Options.Create(options),
-            NullLogger<MarketplaceFulfillmentService>.Instance);
+        new(fulfillment, marketplace, tenants, Substitute.For<IMarketplaceNotificationService>(),
+            Options.Create(options), NullLogger<MarketplaceFulfillmentService>.Instance);
 
     private static IFulfillmentApiService FulfillmentResolving(string planId) =>
         ResolvingWith(new ResolvedSubscriptionResult
