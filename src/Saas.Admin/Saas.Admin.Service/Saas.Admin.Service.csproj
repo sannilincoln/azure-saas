@@ -21,6 +21,10 @@
 		     on stricter NuGet resolvers (the ADO hosted agent's). -->
 		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
 		<PackageReference Include="Microsoft.CodeAnalysis.Common" Version="4.14.0" />
+		<!-- Marketplace.SaaS.Client 2.2.0 needs System.Text.Json >= 9.0.6, while Microsoft.Graph's
+		     Kiota chain caps it at < 9.0.0. Pin 9.0.6 directly so a strict restore (ADO agent) unifies
+		     the graph instead of failing NU1107; the app already runs on 9.0.6. -->
+		<PackageReference Include="System.Text.Json" Version="9.0.6" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.6" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.6">
 			<PrivateAssets>all</PrivateAssets>
