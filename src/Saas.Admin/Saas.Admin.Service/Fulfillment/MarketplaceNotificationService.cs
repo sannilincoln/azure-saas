@@ -28,37 +28,41 @@ public record SubscriptionActivatedNotice(
     string? CustomerEmail);
 
 public class SmtpMarketplaceNotificationService(
+    IMarketplaceNotificationSettingsStore settingsStore,
     IOptions<MarketplaceOptions> marketplaceOptions,
     ILogger<SmtpMarketplaceNotificationService> logger) : IMarketplaceNotificationService
 {
     public async Task NotifySubscriptionActivatedAsync(SubscriptionActivatedNotice notice, CancellationToken cancellationToken = default)
     {
-        var options = marketplaceOptions.Value.Notifications;
+        // SMTP transport (host/port/credentials) is infra + secret => config only. The enabled flag
+        // and from/to addresses are publisher-editable from the console => read from the store.
+        var transport = marketplaceOptions.Value.Notifications;
+        var settings = await settingsStore.GetAsync(cancellationToken);
 
-        if (options is null || !options.Enabled)
+        if (!settings.Enabled)
         {
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(options.SmtpHost)
-            || string.IsNullOrWhiteSpace(options.FromEmail)
-            || string.IsNullOrWhiteSpace(options.ToEmails))
+        if (transport is null || string.IsNullOrWhiteSpace(transport.SmtpHost)
+            || string.IsNullOrWhiteSpace(settings.FromEmail)
+            || string.IsNullOrWhiteSpace(settings.ToEmails))
         {
             logger.LogWarning(
-                "Marketplace notifications are enabled but SmtpHost/FromEmail/ToEmails are not all set; " +
+                "Marketplace notifications are enabled but SMTP host (config) or From/To (console) are not all set; " +
                 "skipping the activation email for subscription {SubscriptionId}.", notice.SubscriptionId);
             return;
         }
 
         try
         {
-            using var message = new MailMessage { From = new MailAddress(options.FromEmail), IsBodyHtml = true };
-            foreach (var to in SplitAddresses(options.ToEmails))
+            using var message = new MailMessage { From = new MailAddress(settings.FromEmail), IsBodyHtml = true };
+            foreach (var to in SplitAddresses(settings.ToEmails))
             {
                 message.To.Add(to);
             }
 
-            if (options.CopyToCustomer && !string.IsNullOrWhiteSpace(notice.CustomerEmail))
+            if (settings.CopyToCustomer && !string.IsNullOrWhiteSpace(notice.CustomerEmail))
             {
                 message.CC.Add(notice.CustomerEmail);
             }
@@ -66,21 +70,21 @@ public class SmtpMarketplaceNotificationService(
             message.Subject = $"New subscription: {notice.TenantName} ({notice.PlanId})";
             message.Body = BuildBody(notice);
 
-            using var smtp = new SmtpClient(options.SmtpHost, options.SmtpPort)
+            using var smtp = new SmtpClient(transport.SmtpHost, transport.SmtpPort)
             {
-                EnableSsl = options.SmtpUseSsl,
+                EnableSsl = transport.SmtpUseSsl,
                 UseDefaultCredentials = false,
             };
-            if (!string.IsNullOrWhiteSpace(options.SmtpUsername))
+            if (!string.IsNullOrWhiteSpace(transport.SmtpUsername))
             {
-                smtp.Credentials = new NetworkCredential(options.SmtpUsername, options.SmtpPassword);
+                smtp.Credentials = new NetworkCredential(transport.SmtpUsername, transport.SmtpPassword);
             }
 
             await smtp.SendMailAsync(message, cancellationToken);
 
             logger.LogInformation(
                 "Sent marketplace activation notification for subscription {SubscriptionId} to {Recipients}.",
-                notice.SubscriptionId, options.ToEmails);
+                notice.SubscriptionId, settings.ToEmails);
         }
         catch (Exception ex)
         {

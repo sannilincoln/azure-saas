@@ -23,7 +23,15 @@ public interface IMarketplaceAdminClient
 
     /// <summary>Administratively override a subscription's status (publisher console).</summary>
     Task<SubscriptionInfo?> OverrideSubscriptionStatusAsync(Guid subscriptionId, string status);
+
+    /// <summary>Read the publisher-editable notification settings (publisher console).</summary>
+    Task<NotificationSettings> GetNotificationSettingsAsync();
+
+    /// <summary>Update the publisher-editable notification settings (publisher console).</summary>
+    Task UpdateNotificationSettingsAsync(NotificationSettings settings);
 }
+
+public record NotificationSettings(bool Enabled, string? FromEmail, string? ToEmails, bool CopyToCustomer);
 
 public record ResolvedSubscription(
     Guid SubscriptionId,
@@ -92,6 +100,30 @@ public class MarketplaceAdminClient(
 
     public Task<SubscriptionInfo?> OverrideSubscriptionStatusAsync(Guid subscriptionId, string status) =>
         PostForSubscriptionAsync($"api/marketplace/subscriptions/{subscriptionId}/status", new { status });
+
+    public async Task<NotificationSettings> GetNotificationSettingsAsync()
+    {
+        using var request = await CreateHttpRequestMessageAsync(CancellationToken.None);
+        request.Method = HttpMethod.Get;
+        request.RequestUri = new Uri("api/marketplace/notifications/settings", UriKind.Relative);
+
+        using var response = await httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<NotificationSettings>()
+            ?? new NotificationSettings(false, null, null, false);
+    }
+
+    public async Task UpdateNotificationSettingsAsync(NotificationSettings settings)
+    {
+        using var request = await CreateHttpRequestMessageAsync(CancellationToken.None);
+        request.Method = HttpMethod.Put;
+        request.RequestUri = new Uri("api/marketplace/notifications/settings", UriKind.Relative);
+        request.Content = JsonContent.Create(settings);
+
+        using var response = await httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+    }
 
     private async Task<IReadOnlyList<SubscriptionInfo>> GetListAsync(string relativeUri)
     {

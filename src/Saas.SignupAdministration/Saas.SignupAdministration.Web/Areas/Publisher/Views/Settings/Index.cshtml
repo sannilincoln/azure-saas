@@ -1,0 +1,43 @@
+@model NotificationSettings
+
+@{
+    ViewData["Title"] = "Notification Settings (Publisher)";
+}
+
+<h1>Notification Settings</h1>
+<p class="text-muted">Who gets emailed when a customer signs up. SMTP server settings are managed in configuration.</p>
+
+@if (TempData["SettingsSaved"] is true)
+{
+    <div class="alert alert-success">Settings saved.</div>
+}
+
+<form asp-area="Publisher" asp-controller="Settings" asp-action="Index" method="post" style="max-width:640px">
+    @Html.AntiForgeryToken()
+
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" name="Enabled" value="true" id="Enabled" @(Model.Enabled ? "checked" : "") />
+        <input type="hidden" name="Enabled" value="false" />
+        <label class="form-check-label" for="Enabled">Send notifications on new sign-up</label>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="FromEmail">From address</label>
+        <input class="form-control" type="email" name="FromEmail" id="FromEmail" value="@Model.FromEmail" placeholder="no-reply@yourdomain.com" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="ToEmails">Recipient address(es)</label>
+        <input class="form-control" type="text" name="ToEmails" id="ToEmails" value="@Model.ToEmails" placeholder="ops@yourdomain.com; sales@yourdomain.com" />
+        <div class="form-text">Separate multiple addresses with a semicolon or comma.</div>
+    </div>
+
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" name="CopyToCustomer" value="true" id="CopyToCustomer" @(Model.CopyToCustomer ? "checked" : "") />
+        <input type="hidden" name="CopyToCustomer" value="false" />
+        <label class="form-check-label" for="CopyToCustomer">Also CC the customer who signed up</label>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a class="btn btn-outline-secondary" asp-area="Publisher" asp-controller="Subscriptions" asp-action="Index">Back to subscriptions</a>
+</form>

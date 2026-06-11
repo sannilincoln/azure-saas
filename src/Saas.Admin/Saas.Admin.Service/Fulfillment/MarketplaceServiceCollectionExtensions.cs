@@ -58,8 +58,9 @@ public static class MarketplaceServiceCollectionExtensions
         services.AddScoped<IFulfillmentApiService, FulfillmentApiService>();
         services.AddScoped<IMarketplaceFulfillmentService, MarketplaceFulfillmentService>();
 
-        // Optional publisher email on activation (a tenant signing up). Inert unless
-        // Marketplace:Notifications:Enabled is set; see MarketplaceNotificationOptions.
+        // Optional publisher email on activation (a tenant signing up). The enabled flag + from/to
+        // are publisher-editable (settings store); SMTP transport stays in config/Key Vault.
+        services.AddScoped<IMarketplaceNotificationSettingsStore, MarketplaceNotificationSettingsStore>();
         services.AddScoped<IMarketplaceNotificationService, SmtpMarketplaceNotificationService>();
 
         // Read/manage layer behind the in-app publisher console + customer self-service.

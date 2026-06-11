@@ -4,7 +4,10 @@
     ViewData["Title"] = "Subscriptions (Publisher)";
 }
 
-<h1>Marketplace Subscriptions</h1>
+<div class="d-flex justify-content-between align-items-center">
+    <h1>Marketplace Subscriptions</h1>
+    <a class="btn btn-outline-secondary" asp-area="Publisher" asp-controller="Settings" asp-action="Index">Notification settings</a>
+</div>
 <p class="text-muted">All customer subscriptions for this product.</p>
 
 @if (Model.Count == 0)
