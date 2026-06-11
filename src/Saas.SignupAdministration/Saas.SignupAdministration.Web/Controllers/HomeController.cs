@@ -26,12 +26,6 @@ public class HomeController : Controller
     }
 
     [HttpGet]
-    public IActionResult Pricing()
-    {
-        return View();
-    }
-
-    [HttpGet]
     public IActionResult Privacy()
     {
         return View();

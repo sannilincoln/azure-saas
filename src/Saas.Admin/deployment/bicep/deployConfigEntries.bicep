@@ -118,7 +118,10 @@ var appConfigStore = {
     }
     {
       key: '${adminApiKeyName}:${azureB2CKeyName}:Audience'
-      value: clientId
+      // v2 access tokens for this API carry aud = the App ID URI (api://{clientId}) because the
+      // app registration exposes scopes under that URI. Microsoft.Identity.Web validates against
+      // this single value, so it must be the api:// form, not the bare client id (else IDX10214).
+      value: 'api://${clientId}'
       isSecret: false
       contentType: 'text/plain'
     }
