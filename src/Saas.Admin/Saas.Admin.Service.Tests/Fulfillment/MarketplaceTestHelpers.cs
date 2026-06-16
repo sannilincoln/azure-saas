@@ -54,7 +54,8 @@ internal static class MarketplaceTestHelpers
         TenantsContext db,
         Guid tenantId,
         Guid? subscriptionId = null,
-        string? subscriptionStatus = null)
+        string? subscriptionStatus = null,
+        int productTierId = 0)
     {
         var tenant = new Tenant
         {
@@ -62,6 +63,7 @@ internal static class MarketplaceTestHelpers
             Name = $"tenant-{tenantId:N}",
             Route = $"route-{tenantId:N}",
             CreatorEmail = "owner@example.com",
+            ProductTierId = productTierId,
             // Normally DB/SaveChanges-generated; the InMemory provider skips that, and the model
             // marks it required, so set it explicitly here.
             CreatedTime = DateTime.UtcNow,

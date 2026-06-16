@@ -62,8 +62,13 @@ internal sealed class MarketplaceApiFactory : IDisposable
                     // The only external boundary is stubbed; everything else is the production type.
                     services.AddScoped(_ => Substitute.For<IFulfillmentApiService>());
                     services.AddScoped<ISubscriptionQueryService, SubscriptionQueryService>();
+                    services.AddScoped<ITenantQuotaService, TenantQuotaService>();
 
-                    services.AddSingleton(Options.Create(new MarketplaceOptions { PublisherTenantId = PublisherTenantId.ToString() }));
+                    services.AddSingleton(Options.Create(new MarketplaceOptions
+                    {
+                        PublisherTenantId = PublisherTenantId.ToString(),
+                        TierMaxStudents = new System.Collections.Generic.Dictionary<int, int> { [7] = 2000 },
+                    }));
 
                     services.AddAuthentication(StubAuthHandler.SchemeName)
                         .AddScheme<AuthenticationSchemeOptions, StubAuthHandler>(StubAuthHandler.SchemeName, _ => { });

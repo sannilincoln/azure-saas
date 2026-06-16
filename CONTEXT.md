@@ -30,8 +30,11 @@ ProductTier and to a **Student ceiling**.
 
 **Student ceiling**:
 The maximum number of Students a Tenant may hold, determined by its purchased Plan via a
-plan -> maxStudents map (config-driven, like the existing `Marketplace:PlanToProductTier`). Enforced by
-counting Student rows at create time. Independent of the marketplace `Ampquantity` (seat) value.
+tier -> maxStudents map (`Marketplace:TierMaxStudents`, config-driven, like the existing
+`Marketplace:PlanToProductTier`). Enforced by counting Student rows at create time. Independent of the
+marketplace `Ampquantity` (seat) value. **Fail-closed:** an unmapped tier resolves to a ceiling of `0`
+(no Students may be registered) — so every live Plan's tier, plus the tier of any migrated/legacy
+Tenant, MUST be mapped. There is no "unlimited" value; an uncapped Plan maps to an explicit high number.
 
 **Permission**:
 A capability string scoped to a `(Tenant, Seat)` pair, stored in ASDK's `SaasPermission` table

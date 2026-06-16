@@ -66,6 +66,9 @@ public static class MarketplaceServiceCollectionExtensions
         // Read/manage layer behind the in-app publisher console + customer self-service.
         services.AddScoped<ISubscriptionQueryService, SubscriptionQueryService>();
 
+        // Tenant student-quota resolution (plan/tier -> ceiling), published to the product app.
+        services.AddScoped<ITenantQuotaService, TenantQuotaService>();
+
         // Connection webhook: inbound-JWT validator + our lifecycle handler.
         services.AddSingleton<ValidateJwtToken>();
         services.AddScoped<IWebhookHandler, MarketplaceWebhookHandler>();

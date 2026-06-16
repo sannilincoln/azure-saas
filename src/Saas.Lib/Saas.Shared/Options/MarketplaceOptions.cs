@@ -31,6 +31,19 @@ public record MarketplaceOptions
     public Dictionary<string, int>? PlanToProductTier { get; init; }
 
     /// <summary>
+    /// Maps this product's internal ProductTier id to the maximum number of students a tenant on that
+    /// tier may hold (the marketplace plan's gated metric). Keyed by ProductTier id; value is the
+    /// ceiling. The ceiling is enforced product-side (Edulynk counts student rows); the platform only
+    /// publishes the number via the tenant quota endpoint.
+    /// <para>
+    /// <b>Fail-closed:</b> a tier not present in the map — or a null/absent map — resolves to a ceiling
+    /// of <c>0</c>, i.e. <b>no students may be registered</b>. This is deliberate: a configuration slip
+    /// must not silently hand a tenant unlimited students. Every live plan's tier MUST be mapped here.
+    /// </para>
+    /// </summary>
+    public Dictionary<int, int>? TierMaxStudents { get; init; }
+
+    /// <summary>
     /// Optional email-notification settings. When enabled, the publisher is emailed on key
     /// subscription events — currently a new subscription activating (i.e. a tenant signing up).
     /// Disabled and inert unless <see cref="MarketplaceNotificationOptions.Enabled"/> is set.
