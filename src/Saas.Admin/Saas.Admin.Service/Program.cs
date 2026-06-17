@@ -119,6 +119,10 @@ builder.Services.AddDbContext<TenantsContext>(options =>
 // real implementation is registered last inside the guard so it wins the single-resolve.
 builder.Services.AddScoped<IMarketplaceSeatService, NoopMarketplaceSeatService>();
 
+// Default product provisioning: does nothing until a real (HTTP) provisioner is registered. Lets
+// the platform run before the product API exists; the marketplace fulfillment service depends on it.
+builder.Services.AddScoped<IProductProvisioningService, NoopProductProvisioningService>();
+
 // Azure Marketplace fulfillment store — the vendored accelerator SaasKitContext. Registered
 // only when a marketplace connection string is configured, so the Admin API keeps working in
 // environments that don't yet have the marketplace database provisioned (added in Phase H).

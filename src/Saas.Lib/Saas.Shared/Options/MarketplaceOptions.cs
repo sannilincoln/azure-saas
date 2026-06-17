@@ -44,6 +44,16 @@ public record MarketplaceOptions
     public Dictionary<int, int>? TierMaxStudents { get; init; }
 
     /// <summary>
+    /// Prefix for a marketplace-provisioned tenant's dedicated database name; the name is
+    /// <c>{prefix}-{tenant route}</c>, stored on the tenant and handed to the product provisioning
+    /// service at activation. When null/empty, per-tenant database provisioning is disabled (the
+    /// platform sets no database name and does not call the provisioning service) — appropriate for
+    /// products that don't use a database-per-tenant model. Keeps the platform product-agnostic: the
+    /// product name lives in config, not code.
+    /// </summary>
+    public string? TenantDatabaseNamePrefix { get; init; }
+
+    /// <summary>
     /// Optional email-notification settings. When enabled, the publisher is emailed on key
     /// subscription events — currently a new subscription activating (i.e. a tenant signing up).
     /// Disabled and inert unless <see cref="MarketplaceNotificationOptions.Enabled"/> is set.

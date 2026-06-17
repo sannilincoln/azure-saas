@@ -74,19 +74,20 @@ code required to land/test this phase.
 - `Controllers/TenantInfoDTO.cs`: surface `DatabaseName` so `tenantinfo/{route}` and the by-id path
   return it. `Saas.Admin.Client` is regenerated from the nswag spec (it's a generated client).
 
-### 1.3 Provisioning hook at activation
-- `Fulfillment/MarketplaceFulfillmentService.cs` `ActivateAsync` (line ~94, after the tenant link
-  commit, before the best-effort notify): compute the database name
-  (`$"edulynk-{tenant.Route}"`), persist it onto the tenant, then call a new
-  `IProductProvisioningService.ProvisionAsync(tenantId, databaseName)`.
-- New `Fulfillment/ProductProvisioningService.cs` (+ interface): HTTP `POST` to the Edulynk API
-  internal provision endpoint (2.6), authenticated app-to-app (4.4). **Best-effort + retried**, but
-  unlike the email notify this is *not* fire-and-forget — a provisioning failure must be visible
-  (surface to onboarding as a retryable error / mark tenant `ProvisioningPending`). Decide: synchronous
-  with retry vs. queued via the existing Azure Service Bus. **Recommended:** synchronous call with a
-  short retry, and an idempotent provision endpoint (safe to replay).
-- Registration in `Fulfillment/MarketplaceServiceCollectionExtensions.cs` (scoped, only when
-  marketplace configured). Default `Noop` impl in Program.cs for non-marketplace builds.
+### 1.3 Provisioning hook at activation  ✅ (HTTP impl deferred)
+- **Done:** `ActivateAsync` now chooses the database name from a **configurable prefix**
+  (`MarketplaceOptions.TenantDatabaseNamePrefix` → `"{prefix}-{route}"`, kept product-agnostic — the
+  product name is config, not a literal in the platform), persists it on the tenant, then calls
+  `IProductProvisioningService.ProvisionAsync(tenantId, databaseName)`. No prefix ⇒ provisioning is
+  skipped (products without a DB-per-tenant model). The call is **synchronous and not swallowed** — a
+  provisioning failure propagates (unlike the best-effort email notify).
+- **Done:** `IProductProvisioningService` + `NoopProductProvisioningService` (default, registered in
+  `Program.cs`); `MarketplaceFulfillmentService` takes it as a dependency.
+- **Remaining (depends on 2.6 + 4.4):** the real `HttpProductProvisioningService` — `POST` to the
+  Edulynk internal provision endpoint, app-to-app auth, idempotent, with a short retry. Register it in
+  `MarketplaceServiceCollectionExtensions` (overriding the Noop) once the product endpoint + service
+  app-role exist. Open decision still: short-retry-sync vs. queue via the existing Service Bus; and
+  whether to mark the tenant `ProvisioningPending` on failure.
 
 ### 1.4 Seat service stays Noop
 - **No change** to `Program.cs:138`. We gate students (in Edulynk), not users. Leave the user-seat

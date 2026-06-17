@@ -13,6 +13,7 @@ public class MarketplaceFulfillmentService(
     SaasKitContext marketplaceDb,
     TenantsContext tenantsDb,
     IMarketplaceNotificationService notifications,
+    IProductProvisioningService provisioning,
     IOptions<MarketplaceOptions> marketplaceOptions,
     ILogger<MarketplaceFulfillmentService> logger) : IMarketplaceFulfillmentService
 {
@@ -91,10 +92,30 @@ public class MarketplaceFulfillmentService(
             ?? throw new InvalidOperationException($"Tenant {tenantId} not found when linking subscription {subscriptionId}.");
         tenant.SubscriptionId = subscriptionId;
         tenant.SubscriptionStatus = StatusSubscribed;
+
+        // Choose the tenant's dedicated database name (product-agnostic: the prefix is config, not a
+        // literal). When no prefix is configured, this product doesn't use a database-per-tenant model
+        // and provisioning is skipped entirely.
+        var databaseNamePrefix = marketplaceOptions.Value.TenantDatabaseNamePrefix;
+        string? databaseName = null;
+        if (!string.IsNullOrWhiteSpace(databaseNamePrefix))
+        {
+            databaseName = $"{databaseNamePrefix}-{tenant.Route}";
+            tenant.DatabaseName = databaseName;
+        }
+
         await tenantsDb.SaveChangesAsync();
 
         logger.LogInformation("Activated marketplace subscription {SubscriptionId} and linked it to tenant {TenantId}.",
             subscriptionId, tenantId);
+
+        // Provision the product side (per-tenant database). Synchronous and idempotent: the database
+        // must exist before the customer uses the product. Unlike the publisher email below, a
+        // provisioning failure is NOT swallowed — it propagates so onboarding can surface/retry it.
+        if (databaseName is not null)
+        {
+            await provisioning.ProvisionAsync(tenantId, databaseName);
+        }
 
         // Best-effort: tell the publisher a tenant just signed up. This never throws (the activation
         // itself is already committed; an email hiccup must not fail the customer's onboarding).

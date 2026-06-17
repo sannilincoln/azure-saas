@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Marketplace.SaaS.Accelerator.Services.Contracts;
 using Marketplace.SaaS.Accelerator.Services.Models;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,8 +17,10 @@ public class MarketplaceFulfillmentServiceTests
         IFulfillmentApiService fulfillment,
         MarketplaceOptions options,
         Marketplace.SaaS.Accelerator.DataAccess.Context.SaasKitContext marketplace,
-        Saas.Admin.Service.Data.TenantsContext tenants) =>
+        Saas.Admin.Service.Data.TenantsContext tenants,
+        IProductProvisioningService? provisioning = null) =>
         new(fulfillment, marketplace, tenants, Substitute.For<IMarketplaceNotificationService>(),
+            provisioning ?? Substitute.For<IProductProvisioningService>(),
             Options.Create(options), NullLogger<MarketplaceFulfillmentService>.Instance);
 
     private static IFulfillmentApiService FulfillmentResolving(string planId) =>
@@ -100,5 +103,47 @@ public class MarketplaceFulfillmentServiceTests
         Assert.Equal(customerTenant, persisted.PurchaserTenantId);
         Assert.Equal("PendingFulfillmentStart", persisted.SubscriptionStatus);
         Assert.Equal(dto.SubscriptionId, persisted.AmpsubscriptionId);
+    }
+
+    [Fact]
+    public async Task Activate_WithDatabasePrefix_PersistsDatabaseName_AndProvisions()
+    {
+        using var marketplace = MarketplaceTestHelpers.NewMarketplaceDb();
+        using var tenants = MarketplaceTestHelpers.NewTenantsDb();
+        var subId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        MarketplaceTestHelpers.SeedSubscription(marketplace, subId);
+        var tenant = MarketplaceTestHelpers.SeedTenant(tenants, tenantId);
+
+        var provisioning = Substitute.For<IProductProvisioningService>();
+        var options = new MarketplaceOptions { TenantDatabaseNamePrefix = "edulynk" };
+        var service = Build(Substitute.For<IFulfillmentApiService>(), options, marketplace, tenants, provisioning);
+
+        await service.ActivateAsync(subId, tenantId);
+
+        var expectedDb = $"edulynk-{tenant.Route}";
+        var persisted = tenants.Tenants.Single(t => t.Id == tenantId);
+        Assert.Equal(expectedDb, persisted.DatabaseName);
+        await provisioning.Received(1).ProvisionAsync(tenantId, expectedDb);
+    }
+
+    [Fact]
+    public async Task Activate_WithoutDatabasePrefix_DoesNotSetNameOrProvision()
+    {
+        using var marketplace = MarketplaceTestHelpers.NewMarketplaceDb();
+        using var tenants = MarketplaceTestHelpers.NewTenantsDb();
+        var subId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        MarketplaceTestHelpers.SeedSubscription(marketplace, subId);
+        MarketplaceTestHelpers.SeedTenant(tenants, tenantId);
+
+        var provisioning = Substitute.For<IProductProvisioningService>();
+        var service = Build(Substitute.For<IFulfillmentApiService>(), new MarketplaceOptions(), marketplace, tenants, provisioning);
+
+        await service.ActivateAsync(subId, tenantId);
+
+        var persisted = tenants.Tenants.Single(t => t.Id == tenantId);
+        Assert.Null(persisted.DatabaseName);
+        await provisioning.DidNotReceive().ProvisionAsync(Arg.Any<Guid>(), Arg.Any<string>());
     }
 }
