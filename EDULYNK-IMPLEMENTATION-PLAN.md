@@ -307,7 +307,7 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
   pass):** decorate the other controllers (academics, other fee/transaction controllers, core lookups)
   once the matrix settles in use.
 
-### 2.6 Provisioning endpoint (called by Phase 1.3)
+### 2.6 Provisioning endpoint (called by Phase 1.3)  ✅ DONE (TDD, `saas-kit-integration`)
 - New `POST /internal/tenants/{tenantId}/provision` `{ databaseName }`, authorized **app-only**
   (the platform's service token; see 4.4) — never user-callable.
 - Steps (idempotent): `CREATE DATABASE [name] (EDITION='Basic')` if absent → run EF
@@ -316,6 +316,16 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
 - Requires the API's managed identity to have **CREATE DATABASE** rights on the server (server AAD
   admin or `dbmanager`); provisioning also runs `CREATE USER [mi] FROM EXTERNAL PROVIDER` + role on
   the new DB so subsequent runtime connections (2.3) work.
+- **Done:** `TenantProvisioningController` (`/internal`, `[Authorize]` — 4.4 tightens to the
+  provisioning app-role; 1 test) → `TenantProvisioningService` orchestrator (validates name,
+  EnsureDatabaseExists → MigrateAndSeed in order, idempotent/replay-safe; 2 tests). Real adapter
+  `SqlTenantDatabaseProvisioner` (CREATE DATABASE Basic via MI → EF `MigrateAsync` → `DatabaseSeeder`;
+  name-guarded). `TenantResolutionMiddleware` bypasses `/internal` (1 test). **Decision:**
+  sync-with-retry — the endpoint is idempotent; transient-retry lives in the platform HTTP caller (1.3),
+  not here. **Deferred to Phase 5 (integration, real SQL):** validate the DDL/migrate path + add the
+  runtime MI `CREATE USER … FROM EXTERNAL PROVIDER` grant on the new DB (TODO in
+  `SqlTenantDatabaseProvisioner`). **Platform side still pending (1.3 + 4.4):** swap the
+  `NoopProductProvisioningService` for the real `HttpProductProvisioningService` that POSTs here.
 
 ### 2.7 Tenant Settings (Power BI etc.)
 - New `TenantSetting` table in the tenant DB (or a small per-tenant settings row) holding the school's
