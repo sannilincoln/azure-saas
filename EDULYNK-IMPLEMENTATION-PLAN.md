@@ -374,19 +374,39 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
 
 ---
 
-## Phase 3 — Edulynk Web (FE) (Next.js)
+## Phase 3 — Edulynk Web (FE) (Next.js)  🟡 IN PROGRESS (FE repo `Educ8e Connector - FE-1`, branch `saas-kit-integration`)
 
-### 3.1 Multitenant sign-in
+> **Test harness added:** the FE had no test runner — added **Vitest + React Testing Library** (jsdom),
+> config + `test` scripts. FE work is TDD'd where it's unit-testable (logic/hooks); NextAuth/config is
+> typecheck-verified. FE suite: 10 green.
+>
+> **⚠ Pre-existing build issue found:** `app/api/auth/[...nextauth]/route.ts` has a stray
+> `export const authOptions = {…}` that violates Next's route-module contract (`.next/types` TS2344) —
+> likely breaks `next build`. Predates this work; remove it during the 3.2 pass.
+
+### 3.1 Multitenant sign-in  ✅ DONE (typecheck-verified)
 - `app/api/auth/[...nextauth]/route.ts`: `AzureADProvider` `tenantId: "organizations"`; client id =
   the **saas-app** registration; add the Edulynk API scope (`api://f41f679b…/access_as_user`, the
   reused API reg per 4.2) to request a token usable against the API.
 - Add the FE redirect URIs to the saas-app registration (4.1).
+- **Done:** `tenantId` defaults to `"organizations"`; scope now requests the API scope (configurable via
+  `AZURE_AD_API_SCOPE`). Kept `decoded.roles` for now so the current role UI works until the 3.2
+  call-site migration. *Validation needs the saas-app reg redirect URIs + API reg pre-auth (4.1/4.2).*
 
-### 3.2 Permission-based gating (replace Entra roles)
+### 3.2 Permission-based gating (replace Entra roles)  🟡 PARTIAL
 - `app/context/roleSelection-context.tsx` + `lib/withAuth.tsx`: stop reading `decoded.roles` from the
   Entra token. Instead fetch permissions from the Edulynk API (which proxies the Permissions API for
   the signed-in user+tenant) once per session; gate UI on permission strings.
 - Keep the role *concept* for display ("you are a Bursar"), derived from the assigned role string.
+- **Done (core, TDD):** `lib/permissions.ts` `hasPermission` (`*`=all, OR-lists, fail-closed; 5 tests);
+  `lib/permissions-context.tsx` `PermissionsProvider`/`usePermissions` (injected loader, fail-closed;
+  2 tests); axios **bearer-token interceptor** (`data/api/authInterceptor.ts`, from the NextAuth session;
+  3 tests) — the FE previously sent **no token** to the API; `permissions.me()` + `loadUserPermissions`.
+  **Backend (API branch):** `GET /api/me/permissions` (`MeController`, reuses `IPermissionResolver`;
+  1 test).
+- **Remaining (the big, entangled pass):** wire `PermissionsProvider` into the app provider tree; migrate
+  all call sites off role-based `hasPermission`/`selectedRole`/`availableRoles` (`roleSelection-context`,
+  `withAuth`, sidebar, dashboards) to `can(...)`; keep role for display. Validate with `next build`.
 
 ### 3.3 Tenant Settings instead of env
 - Power BI report/workspace IDs (the ~12 `*_REPORT_ID` env vars) move to a `GET /api/tenant-settings`
