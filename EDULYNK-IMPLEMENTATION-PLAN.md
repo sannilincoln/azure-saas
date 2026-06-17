@@ -327,11 +327,23 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
   `SqlTenantDatabaseProvisioner`). **Platform side still pending (1.3 + 4.4):** swap the
   `NoopProductProvisioningService` for the real `HttpProductProvisioningService` that POSTs here.
 
-### 2.7 Tenant Settings (Power BI etc.)
+### 2.7 Tenant Settings (Power BI etc.)  ✅ DONE (TDD, `saas-kit-integration`)
 - New `TenantSetting` table in the tenant DB (or a small per-tenant settings row) holding the school's
   Power BI workspace/report IDs and branding.
 - `GET/PUT /api/tenant-settings` (admin-gated) so values are managed in-product, not env.
 - Power BI embed-token route reads workspace/report IDs from settings, not `process.env`.
+- **Done (decided: key/value bag):** `TenantSetting {Id,Key,Value}` (`cor_tenant_settings`, unique Key)
+  — new reports/branding need no schema change. `TenantSettingsService` (get→dict, set→upsert; 3 tests
+  via EF InMemory). `TenantSettingsController` `GET/PUT /api/tenant-settings` gated on
+  `tenant.settings.read`/`write` (admin-only — only Admin's `*`; 2 tests). Added
+  `ApplicationDbContextFactory` (`IDesignTimeDbContextFactory`) so EF tooling can build the per-request
+  context. The FE switch (3.3) consumes `GET /api/tenant-settings` instead of `process.env`.
+- **⚠ Migration deferred to Phase 5 (real infra):** `dotnet ef migrations add` scaffolded **323
+  destructive ops** — the Educ8e **migration chain is drifted from the model** (stale snapshot; not the
+  schema source of truth). So provisioning's `Database.MigrateAsync()` (2.6) will **not** build a correct
+  fresh schema. Phase 5 must decide the schema-provisioning strategy (baseline migration vs
+  `EnsureCreated`) and create `cor_tenant_settings` (+ all tables) in real tenant DBs. Feature logic is
+  complete + tested via InMemory.
 
 ### 2.8 Service-to-service auth & secrets
 - Edulynk API → Admin/Permissions APIs: **client-credentials** app token (the endpoints take
@@ -506,7 +518,16 @@ plus a client secret for the service-to-service flow.
    dedicated provisioning identity with `dbmanager` only.
 5. **SWA hybrid + NextAuth:** verify first (3.4).
 6. **Provisioning latency/failure UX:** Basic DB create + migrate + seed can take a minute; decide
-   sync-with-retry vs Service Bus queue (1.3) and what the buyer sees meanwhile.
+   sync-with-retry vs Service Bus queue (1.3) and what the buyer sees meanwhile. **Resolved (2.6):**
+   sync-with-retry — the Edulynk endpoint is idempotent; transient-retry lives in the platform's HTTP
+   caller.
+7. **⚠ Edulynk migration chain is drifted (found in 2.7):** `dotnet ef migrations add` scaffolds ~323
+   destructive ops — the model evolved far past the only migration's snapshot, so **migrations are not
+   the schema source of truth** and `Database.MigrateAsync()` (used by provisioning 2.6) will not build
+   a correct fresh tenant schema. **Phase 5 (M2/M3) must decide the schema-provisioning strategy**
+   (baseline a fresh migration from the current model, or `EnsureCreated()`, or DACPAC) and validate
+   `cor_tenant_settings` + all tables get created in a real provisioned DB. Until then, per-tenant DBs
+   can't be stood up automatically.
 
 ## Suggested sequencing (milestones)
 - **M1 (platform-only, shippable):** Phase 1 + Phase 4.1–4.4. Testable with the existing marketplace
