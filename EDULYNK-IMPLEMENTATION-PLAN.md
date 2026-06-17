@@ -415,10 +415,20 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
   gating layer was thin in practice (no page actively used `withAuth` — billing's was commented out).
   Validated: `next build` compiles clean.
 
-### 3.3 Tenant Settings instead of env
-- Power BI report/workspace IDs (the ~12 `*_REPORT_ID` env vars) move to a `GET /api/tenant-settings`
-  call (Phase 2.7). FE env keeps only: `AZURE_AD_CLIENT_ID/SECRET`, `AZURE_AD_TENANT_ID=organizations`,
-  `AUTH_SECRET`, `NEXT_PUBLIC_API_URL`.
+### 3.3 Tenant Settings instead of env  ✅ DONE
+- Power BI report/workspace IDs (the `*_REPORT_ID`/`POWERBI_WORKSPACE_ID` env vars) move to a
+  `GET /api/tenant-settings` call (Phase 2.7). FE env keeps only: `AZURE_AD_CLIENT_ID/SECRET`,
+  `AZURE_AD_TENANT_ID=organizations`, `AUTH_SECRET`, `NEXT_PUBLIC_API_URL`, plus the Power BI service
+  principal creds (`AZURE_TENANT_ID/CLIENT_ID/CLIENT_SECRET`) used to mint embed tokens.
+- **Done (commit `2425437`):** `lib/tenantSettings.ts` — `fetchTenantSettings(accessToken)` calls the
+  Edulynk API `GET /api/tenant-settings` with the user's bearer token (API resolves the tenant + gates
+  `tenant.settings.read`); pure resolvers `resolveWorkspaceId` / `resolveReportIdByName` /
+  `resolveDashboardReportIdByRole`. **Fail-closed**: missing key ⇒ deny (never fall back to another
+  tenant's config). 10 tests. Both server routes rewired: `app/api/get-embed-token` (role dashboard)
+  and `app/api/reports/[reportName]` (now requires a session). Setting-key scheme:
+  `powerbi.workspaceId`, `powerbi.report.<reportName>`, `powerbi.dashboard.<roleSlug>` (Admin↦bursar).
+  FE suite 24 green; `next build` clean. NOTE the per-tenant setting **values** still need seeding at
+  provisioning/admin time (Phase 5/6); dead `utils/powerbi.ts` left as-is (no consumers).
 
 ### 3.4 Config on SWA
 - Server-side values → **SWA application settings** (set by the FE pipeline). `NEXT_PUBLIC_*` baked at
