@@ -485,18 +485,30 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
 > single-tenant grants stay, but new customer tenants must consent on first sign-in. Confirm no
 > leftover B2C/External-ID reply URLs or exposed scopes linger on the reg before flipping.
 
-### 4.3 Service-to-service app roles
-Define an app role (e.g. `Service.Access`) on **admin-api** and **permissions-api**; grant it to the
-Edulynk API app (`6a3e6083…`, admin-consented) so Edulynk's client-credentials token is accepted
-(Phase 2.8). The Admin API must be configured to accept app-only tokens carrying that role for the
-quota/provision/bind endpoints. Reusing the reg means this client-credentials flow needs a **client
-secret / certificate** on `6a3e6083…` — the old single-tenant API never needed one. Create it here,
-store it in Key Vault, and add it to the Phase 7 secret-rotation list (rotate after testing).
+### 4.3 Service-to-service app roles  ✅ DONE (secret deferred to Phase 5)
+- ✅ Defined **`Service.Access`** (Application member type) app role on **admin-api**
+  (`00e9949e-9d55-428a-86ad-a829fdb8d9f5`) and **permissions-api**
+  (`4ede5415-7587-4a5c-a444-55c2139dfc49`).
+- ✅ **Admin-consented grants:** Edulynk API SP `b251b606…` assigned `Service.Access` on both
+  admin-api SP `fbd741fe…` and permissions-api SP `f35a51a5…`.
+- ✅ Set the Edulynk API config `Edulynk:AdminApiScope` = `api://2ddb6984…/.default` (was a placeholder).
+- **Code nuance:** Phase 2.8 currently calls **admin-api via bearer** (`BearerTokenHandler` on catalog/
+  quota → uses the `Service.Access` grant) but **permissions-api via `x-api-key`** (`ApiKeyHandler`). So
+  the permissions-api `Service.Access` grant is **not yet exercised** by the code — it's provisioned so
+  permissions can migrate off the static API key to app-role auth later (more secure). admin-api must
+  still be configured to **accept app-only tokens carrying `Service.Access`** on the quota/bind endpoints.
+- **⏸ Client secret DEFERRED to Phase 5:** the client-credentials flow needs a secret on `6a3e6083…`,
+  but there's no Key Vault yet and the flow can't run until the API is deployed/configured. Mint it at
+  deploy **straight into Key Vault** (`az ad app credential reset --id 6a3e6083… --append
+  --display-name edulynk-s2s --years 1`) and add to the Phase 7 rotation list — avoids parking a secret
+  in scrollback now.
 
-### 4.4 Provisioning identity
-The platform → Edulynk provision call (1.3) uses the Admin API's identity with an app role on the
-Edulynk API reg (`6a3e6083…`, `Provisioning.Write`). Internal provision endpoint authorizes that role
-only.
+### 4.4 Provisioning identity  ✅ DONE
+- ✅ Defined **`Provisioning.Write`** app role on the Edulynk API reg `6a3e6083…`
+  (`ccb53b07-d648-4124-8064-920fc1c9c105`).
+- ✅ **Admin-consented grant:** admin-api SP `fbd741fe…` assigned `Provisioning.Write` on the Edulynk
+  API SP `b251b606…`. The internal provision endpoint (Phase 2.6) authorizes that role only; the
+  platform→Edulynk provision call (1.3) uses the admin-api identity.
 
 ### 4.5 Retire old reg
 Only the **old FE app registration** is retired after cutover. The API reg `6a3e6083…` is **kept and
