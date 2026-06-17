@@ -21,6 +21,7 @@ public class TenantInfoDTO
         Route = Guard.Argument(tenant?.Route, nameof(tenant.Route)).NotEmpty();
         Version = tenant?.ConcurrencyToken != null ? Convert.ToBase64String(tenant.ConcurrencyToken) : null;
         SubscriptionStatus = tenant?.SubscriptionStatus;
+        DatabaseName = tenant?.DatabaseName;
     }
 
     public Tenant ToTenant()
@@ -55,4 +56,10 @@ public class TenantInfoDTO
     /// product app reads this to gate access — Suspended/Unsubscribed block.
     /// </summary>
     public string? SubscriptionStatus { get; set; }
+
+    /// <summary>
+    /// Name of this tenant's dedicated product database. The product app reads this to connect to the
+    /// correct per-tenant database (via its managed identity). Null until the tenant is provisioned.
+    /// </summary>
+    public string? DatabaseName { get; set; }
 }

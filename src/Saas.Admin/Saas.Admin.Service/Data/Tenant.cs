@@ -25,6 +25,14 @@ public class Tenant
     /// </summary>
     public string? SubscriptionStatus { get; set; }
 
+    /// <summary>
+    /// Name of this tenant's dedicated product database (the per-tenant DB the product app connects
+    /// to). Set at provisioning. The product resolves it via the tenantinfo path and connects with its
+    /// managed identity — so no per-tenant credentials are stored here, only the database name. Null
+    /// for tenants not yet provisioned (or non-product tenants).
+    /// </summary>
+    public string? DatabaseName { get; set; }
+
     [Timestamp]
     public byte[]? ConcurrencyToken { get; set; }
 }

@@ -18,6 +18,9 @@ public class TenantEntityTypeConfiguration : IEntityTypeConfiguration<Tenant>
         builder.Property(t => t.Route).IsRequired();
         builder.Property(t => t.CreatorEmail).IsRequired();
 
+        // SQL database names cap at 128 chars; nullable until the tenant is provisioned.
+        builder.Property(t => t.DatabaseName).HasMaxLength(128);
+
         builder.Property(t => t.CreatedTime)
             .IsRequired()
             .HasDefaultValue<DateTime?>(DateTime.UtcNow)
