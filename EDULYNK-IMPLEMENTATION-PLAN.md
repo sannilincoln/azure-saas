@@ -236,9 +236,8 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
   classifies Resolved/NoTenantClaim/NotProvisioned/Inactive (5 green); `TenantResolutionMiddleware`
   (`API/Middleware`) 403s authenticated requests with no active tenant, anonymous passes through
   (3 green). Wired after `UseAuthentication`.
-- **TODO (blocked on 2.1 + 2.3):** delete `GetOrganizationConfiguration.cs` and its hardcoded list
-  (and the plaintext passwords) — the app still boots off it (single-tenant auth + DB connection), so
-  it can only go once multitenant auth (2.1) and the per-tenant DbContext (2.3) replace those two uses.
+- **DONE:** deleted `GetOrganizationConfiguration.cs` and its hardcoded list (removed the `Lagetronix1#`
+  plaintext password) once 2.1 (multitenant auth) + 2.3 (per-tenant DbContext) replaced its two uses.
 
 > **Platform-side dependency added (DONE, TDD, this repo `core-app-integration`).** The plan originally
 > said the catalog "calls `tenantinfo`", but `tenantinfo/{route}` is keyed by **route** and
@@ -252,7 +251,7 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
 > tightens both to the service app-role. 6 unit + 3 integration tests green; 47-test marketplace/
 > integration suite green.
 
-### 2.3 Per-tenant DbContext (managed-identity connection)
+### 2.3 Per-tenant DbContext (managed-identity connection)  ✅ DONE (TDD, `saas-kit-integration`)
 - Replace the static `AddDbContext` (`DependencyInjection.cs`) with a **scoped** connection resolved
   per request: connection string built as
   `Server={sharedSqlServer};Database={tenant.DatabaseName};Authentication=Active Directory Managed Identity`.
@@ -260,6 +259,17 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
   request (configure connection in a scoped provider, not `OnConfiguring` statics). Keep
   `EnableRetryOnFailure`.
 - `sharedSqlServer` comes from App Configuration (`Edulynk:Sql:Server`).
+- **Done:** `TenantConnectionStringBuilder` (pure, MI string, no password — 4 tests) +
+  `ITenantConnectionStringProvider` (reads the request's resolved tenant via the resolver — memoized by
+  the middleware so the sync read never blocks — **fails closed** when no provisioned tenant DB; 3
+  tests). `AddDbContext` now builds its connection per request via the provider. Removed the startup
+  DB-seeding block (incompatible with per-tenant DBs — moves to 2.6 provisioning). Added
+  `Edulynk:Sql:Server`.
+- **Capstone (DONE):** deleted `GetOrganizationConfiguration`(+interface), `OrganizationConfiguration`,
+  `AzureAdConfiguration` — nothing referenced them after 2.1+2.3. This **removed the `Lagetronix1#`
+  plaintext SQL password from the codebase entirely**. (The `appsettings.json` `DefaultConnection`
+  password remains — still on the Phase 7 rotation list; goes once 2.6/2.8 settle design-time
+  migrations + secrets.)
 
 ### 2.4 Student ceiling enforcement
 - New `IStudentQuotaService`: calls Admin API `GET /tenants/{id}/quota` (cached ~5 min) → `maxStudents`.
