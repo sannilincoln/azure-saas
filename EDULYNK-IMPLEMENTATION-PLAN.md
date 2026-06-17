@@ -430,10 +430,21 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
   FE suite 24 green; `next build` clean. NOTE the per-tenant setting **values** still need seeding at
   provisioning/admin time (Phase 5/6); dead `utils/powerbi.ts` left as-is (no consumers).
 
-### 3.4 Config on SWA
+### 3.4 Config on SWA  ✅ DONE (inventory/docs; actual deploy is Phase 5)
 - Server-side values → **SWA application settings** (set by the FE pipeline). `NEXT_PUBLIC_*` baked at
   build time (after 3.3 that's just the API URL). Verify NextAuth runs on SWA's hybrid Next.js
-  **early** (low risk — Educ8e already deploys to SWA — but confirm before building on it).
+  **early** before building on it.
+- **Done (commit `3b59e54`):** `.env.example` (canonical set, split server-runtime secrets vs build-time
+  `NEXT_PUBLIC_API_URL`; notes `*_REPORT_ID`/`POWERBI_WORKSPACE_ID` obsolete per 3.3 and
+  `NEXT_PUBLIC_API_TOKEN` superseded by the bearer interceptor) + `DEPLOYMENT-SWA.md`.
+- **⚠ Hybrid-NextAuth risk is REAL, not low:** `next.config` has **no** `output:'export'`, so the build is
+  hybrid (App Router server routes — NextAuth + the two embed routes + `getServerSession`). The existing
+  SWA pipelines (ADO YAML at the FE repo root, despite GH-style names; trigger `staging`) set
+  **`output_location: "out"`** = static export, which **cannot run** those server routes. **Phase 5 SWA
+  pipeline must use `output_location: ""` + `api_location: ""`** and confirm SWA's managed Next.js
+  backend. Also set `NEXTAUTH_URL` to the SWA host; add `https://<swa-host>/api/auth/callback/azure-ad`
+  to the saas-app reg (4.1). Verify via `GET /api/auth/providers` returning `azure-ad` (proves hybrid,
+  not static).
 
 ---
 
