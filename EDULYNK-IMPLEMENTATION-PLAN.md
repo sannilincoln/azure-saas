@@ -222,9 +222,15 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
   **DONE (TDD, `saas-kit-integration`):** `Domain/Common/Identity/TenantContextAccessor`, tolerates URI +
   short claim forms, fail-closed when no tid/oid. 3 green.
 - New `ITenantCatalog`: given `tid`, calls the Admin API **by-tid** endpoint → `{ id, route,
-  databaseName, subscriptionStatus }`; **cached** (IMemoryCache, ~5 min). Rejects unknown `tid` and
-  `Suspended/Unsubscribed` status (→ 403, mirrors `RequireActiveSubscriptionMiddleware`).
-- Delete `GetOrganizationConfiguration.cs` and its hardcoded list (and the plaintext passwords).
+  databaseName, subscriptionStatus }`; **cached** (IMemoryCache, ~5 min). **DONE (TDD):**
+  `Data/Platform/TenantCatalog`, caches only successful resolutions, `IsActive` flag. 4 green.
+- **DONE (TDD):** `IRequestTenantResolver` (`Data/Platform`) memoizes accessor→catalog per request and
+  classifies Resolved/NoTenantClaim/NotProvisioned/Inactive (5 green); `TenantResolutionMiddleware`
+  (`API/Middleware`) 403s authenticated requests with no active tenant, anonymous passes through
+  (3 green). Wired after `UseAuthentication`.
+- **TODO (blocked on 2.1 + 2.3):** delete `GetOrganizationConfiguration.cs` and its hardcoded list
+  (and the plaintext passwords) — the app still boots off it (single-tenant auth + DB connection), so
+  it can only go once multitenant auth (2.1) and the per-tenant DbContext (2.3) replace those two uses.
 
 > **Platform-side dependency added (DONE, TDD, this repo `core-app-integration`).** The plan originally
 > said the catalog "calls `tenantinfo`", but `tenantinfo/{route}` is keyed by **route** and
