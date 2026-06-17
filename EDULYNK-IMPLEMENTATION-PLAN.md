@@ -286,7 +286,7 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
   exception → 403 + message (2 tests). Quota client uses the same Admin base URL — s2s auth header is
   Phase 2.8 (401s until then).
 
-### 2.5 RBAC (per-request permissions)
+### 2.5 RBAC (per-request permissions)  ✅ DONE (TDD, `saas-kit-integration`)
 - New `IPermissionResolver`: calls Permissions API
   `GET /api/Permissions/GetUserPermissionsForTenant?tenantId&userId` (already exists) → permission
   strings; cached per (tenant,user) for the request/session.
@@ -294,6 +294,18 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
   `student.read`, …). Translate roles to permission strings on assignment.
 - Add ASP.NET Core **authorization policies** mapping endpoints to required permissions; replace the
   lone `[Authorize]` with policy attributes. Controllers gate on permissions, not Entra roles.
+- **Done — engine:** `PermissionResolver` (`Data/Platform`, reads the caller's perms for the resolved
+  tenant, cached, fail-closed; 3 tests) + `SaasPermissionRequirement`/`PermissionAuthorizationHandler`
+  (`*` = full access; 3 tests) + `SaasPermissionPolicyProvider` (`[Authorize(Policy="perm:<x>")]` →
+  requirement + RequireAuthenticatedUser; 3 tests). DI-registered; client base URL
+  `Edulynk:PermissionsApiUrl` (x-api-key is Phase 2.8 — until then resolver returns none = fail-closed).
+- **Done — catalog (decided: Admin + Bursar starter):** `EdulynkPermissions` (vocabulary) +
+  `EdulynkRoleCatalog` (Admin → `*`; Bursar → `fee.read`,`fee.post`,`student.read`,`transaction.read`;
+  4 tests).
+- **Done — decoration (decided: key controllers now):** `StudentsController` (read=student.read,
+  write=student.write) + `FeePaymentsController` (read=fee.read, mutate=fee.post). **Remaining (follow-up
+  pass):** decorate the other controllers (academics, other fee/transaction controllers, core lookups)
+  once the matrix settles in use.
 
 ### 2.6 Provisioning endpoint (called by Phase 1.3)
 - New `POST /internal/tenants/{tenantId}/provision` `{ databaseName }`, authorized **app-only**
