@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -39,5 +40,40 @@ public class TenantsControllerInviteTests
         // The Graph-based email lookup must no longer be used under Workforce multitenant.
         await permissions.DidNotReceive().AddUserPermissionsToTenantByEmailAsync(
             Arg.Any<Guid?>(), Arg.Any<string>(), Arg.Any<IEnumerable<string>>());
+    }
+
+    [Fact]
+    public async Task BindMember_BindsTheCallerFromTheirTokenClaims()
+    {
+        var membership = Substitute.For<ITenantMembershipClient>();
+        var tenantId = Guid.NewGuid();
+        var oid = Guid.NewGuid();
+        membership.BindMemberAsync(tenantId, oid, "bursar@school.edu", "Jane Bursar").Returns("Bound");
+
+        var controller = new TenantsController(
+            Substitute.For<ITenantService>(),
+            Substitute.For<IPermissionsServiceClient>(),
+            Substitute.For<IMarketplaceSeatService>(),
+            membership,
+            Substitute.For<IHttpContextAccessor>(),
+            NullLogger<TenantsController>.Instance);
+
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("http://schemas.microsoft.com/identity/claims/objectidentifier", oid.ToString()),
+            new Claim("preferred_username", "bursar@school.edu"),
+            new Claim("name", "Jane Bursar"),
+        }, "test"));
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = principal },
+        };
+
+        var result = await controller.BindMember(tenantId);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.Equal("Bound", ok.Value);
+        // Identity comes from the token, not from client-supplied params.
+        await membership.Received(1).BindMemberAsync(tenantId, oid, "bursar@school.edu", "Jane Bursar");
     }
 }

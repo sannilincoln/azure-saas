@@ -6,7 +6,9 @@ using Saas.Identity.Authorization.Requirement;
 using Saas.Admin.Service.Fulfillment;
 using Saas.Admin.Service.Membership;
 using Saas.Permissions.Client;
+using Microsoft.Identity.Web;
 using System.Net.Mime;
+using System.Security.Claims;
 
 namespace Saas.Admin.Service.Controllers;
 
@@ -447,6 +449,38 @@ public class TenantsController : ControllerBase
             new string[] { TenantPermissionKind.Admin.ToString() });
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// Bind the signed-in user to a pending invitation on first sign-in (JIT membership).
+    /// </summary>
+    /// <remarks>
+    /// <para>Identity is taken from the caller's validated token — never from client params — so a
+    /// user can only bind themselves. Requires authentication only: the user has no tenant permissions
+    /// yet, and access is granted solely by a matching pending invitation. Assumes the caller presents
+    /// the user's token (passthrough/OBO), not an app-only token. Returns the bind outcome
+    /// (Bound / AlreadyMember / NoInvitation).</para>
+    /// </remarks>
+    [HttpPost("{tenantId}/members/bind")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> BindMember(Guid tenantId)
+    {
+        if (!Guid.TryParse(User.GetObjectId(), out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var email = User.FindFirstValue("preferred_username") ?? User.FindFirstValue(ClaimTypes.Email);
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return BadRequest("The token does not contain an email / preferred_username claim.");
+        }
+
+        var displayName = User.FindFirstValue("name");
+
+        var outcome = await _membershipClient.BindMemberAsync(tenantId, userId, email, displayName);
+        return Ok(outcome);
     }
 
     /// <summary>

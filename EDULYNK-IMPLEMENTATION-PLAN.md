@@ -172,11 +172,17 @@ typed `ITenantMembershipClient` in the Admin service (same Permissions base URL 
 API `invite` path now calls `CreateInvitationAsync` (JIT pending invitation) instead of the Graph email
 lookup. Controller test green; 35 Admin marketplace/integration tests green.
 
-**Remaining wiring (follow-up):**
-- Add an Admin API `members/bind` endpoint (→ `ITenantMembershipClient.BindMemberAsync`) for the
-  product to call on first sign-in.
-- Switch `GetTenantUsers` to read `TenantMember` (drop Graph enrichment) — add
-  `GetTenantMembersAsync` + endpoint, then point the Admin consumption at it.
+**`members/bind` endpoint — done:** Admin API `POST /tenants/{tenantId}/members/bind` binds the
+signed-in user from their **token claims** (`oid`/`preferred_username`/`name`) — never client params,
+so a user can only bind themselves; auth-only (no tenant permission, since the user has none yet).
+Calls `ITenantMembershipClient.BindMemberAsync`. Assumes the caller presents the user's token
+(passthrough/OBO — Phase 2.1/4). Controller test green.
+
+**Remaining wiring (one item, its own slice — entangled with the generated AdminServiceClient + the
+SignupAdmin member-list UI):**
+- Switch `GetTenantUsers` to read `TenantMember` (drop Graph enrichment) — add `GetTenantMembers` on
+  the Permissions service + the membership client, then point the Admin consumption (and the console)
+  at it.
 
 ### Tests (Phase 1)
 - Unit: tier resolution (mapped → ceiling / unmapped → 0 block / absent map → 0 block). Quota
