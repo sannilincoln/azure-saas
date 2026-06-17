@@ -208,7 +208,7 @@ SignupAdmin member-list UI; not on the Phase 2 critical path):**
 Goal: turn the single-tenant Educ8e API into a Workforce-multitenant, per-tenant-DB product service
 that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration`.
 
-### 2.1 Multitenant authentication
+### 2.1 Multitenant authentication  ✅ DONE (TDD, `saas-kit-integration`)
 - `Program.cs`: `AddMicrosoftIdentityWebApi` bound to **multitenant** (`Instance`
   `https://login.microsoftonline.com/`, `TenantId = "organizations"`), audience =
   `api://f41f679b…` (the reused API reg — unchanged audience, see 4.2). Remove the boot-time
@@ -216,6 +216,14 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
 - Issuer validation: accept any tenant but **reject** a token whose `tid` has no provisioned Tenant
   (the tenant resolver returns 404 → middleware 403). Optionally an `IssuerValidator` that defers to
   the resolver.
+- **Done:** config-driven via `EdulynkAuthSettings` (`API/Authentication/`, **fails fast** if pinned to
+  a single tenant or missing audience — 3 tests) + `AddEdulynkMultitenantAuth` extension. Boot-time
+  blocking single-tenant lookup removed. `appsettings AzureAd:TenantId → "organizations"`; added
+  `Edulynk:AdminApiUrl`. Fixed pipeline order (`UseAuthentication` before `UseAuthorization`). No
+  custom `IssuerValidator` needed — `organizations` + the resolution middleware cover it.
+- **Security note:** `appsettings.json` still has a **plaintext `DefaultConnection` password**
+  (`P@ssword`) + Service Bus key; removed with 2.3/2.8 and on the Phase 7 rotation list (a *second*
+  plaintext password, distinct from `GetOrganizationConfiguration`'s `Lagetronix1#`).
 
 ### 2.2 Tenant resolution (replaces OrganizationConfiguration)
 - New `ITenantContextAccessor` (scoped): reads `tid`/`oid`/`email`/`name` from the validated token.
@@ -429,8 +437,10 @@ plus a client secret for the service-to-service flow.
   `lagetronix_rapha_dev`. (One-off script; verify counts.) **Map its ProductTier in
   `Marketplace:TierMaxStudents`** (and tier 0 if any non-marketplace tenants exist) — otherwise the
   fail-closed quota (1.1) blocks all student registration for that tenant.
-- **Rotate** the SQL passwords currently committed in `appsettings.json` /
-  `GetOrganizationConfiguration.cs`, and the Service Bus key, and any chat-shared secrets.
+- **Rotate** the SQL passwords currently committed in `appsettings.json` (Edulynk
+  `DefaultConnection` = `P@ssword`) / `GetOrganizationConfiguration.cs` (`Lagetronix1#`) — **two
+  distinct plaintext SQL passwords** — and the Service Bus key in `appsettings.json`, and any
+  chat-shared secrets.
 - **New `f41f679b…` client secret:** the reused API reg needs a client secret/certificate (added in
   4.3) for the service-to-service calls — the old single-tenant API never had one. Store it in Key
   Vault and add it to this rotation list (rotate after testing, per the standing secret-hygiene rule).
