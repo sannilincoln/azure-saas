@@ -468,20 +468,18 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
 > already fully wired to its own **"Edulynk"** reg `d27b062e…` — recommend **keeping "Edulynk" as the FE
 > identity** (flip it multitenant) rather than re-wiring to saas-app. Confirm before mutating.
 
-### 4.1 FE reg (`d27b062e…` "Edulynk") → multitenant  🟡 mostly pre-wired
-Flip `signInAudience` → `AzureADMultipleOrgs`. Redirect URIs `/api/auth/callback/azure-ad` already
-present for the current SWA hosts; add the final per-product SWA host when known (Phase 5). This is the
-FE's sign-in identity.
+### 4.1 FE reg (`d27b062e…` "Edulynk") → multitenant  ✅ DONE
+**DECIDED: Option A** — keep "Edulynk" as the per-product FE identity (do not re-wire to ASDK saas-app).
+- ✅ `signInAudience` flipped to `AzureADMultipleOrgs` (`az ad app update`).
+- Redirect URIs `/api/auth/callback/azure-ad` already present for the current SWA hosts; add the final
+  per-product SWA host when known (Phase 5).
 
-### 4.2 Edulynk API reg `6a3e6083…` (flip to multitenant)
-Use the existing **"Edulynk API"** reg as the Edulynk API identity. Changes on `6a3e6083…`:
-- Set **`signInAudience` = `AzureADMultipleOrgs`** (single-tenant → multitenant).
-- Application ID URI is already `api://6a3e6083…` and the exposed scope is already `access_as_user`
-  (the API validates `aud = api://6a3e6083…`), so only multitenancy is added.
-- **Pre-authorize the FE client `d27b062e…`** on `access_as_user` (currently no preAuthorizedApps) so
-  consent is streamlined.
-- Verify the API's token validation uses `TenantId = "organizations"` (Phase 2.1) so multi-tenant
-  issuers are accepted.
+### 4.2 Edulynk API reg `6a3e6083…` → multitenant + pre-auth FE  ✅ DONE
+- ✅ `signInAudience` flipped to `AzureADMultipleOrgs`.
+- ✅ FE client `d27b062e…` **pre-authorized** on `access_as_user` (Graph PATCH; existing scope preserved).
+- Application ID URI `api://6a3e6083…` + scope `access_as_user` already correct; the API validates
+  `aud = api://6a3e6083…` with `TenantId = "organizations"` (Phase 2.1) so multi-tenant issuers are
+  accepted. **Note:** first sign-in from each new customer tenant still triggers admin/user consent.
 
 > Reuse subtlety (why this isn't free): multitenant + the app's existing consent state means existing
 > single-tenant grants stay, but new customer tenants must consent on first sign-in. Confirm no
