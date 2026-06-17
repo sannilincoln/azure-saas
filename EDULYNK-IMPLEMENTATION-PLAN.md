@@ -211,7 +211,7 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
 ### 2.1 Multitenant authentication  ✅ DONE (TDD, `saas-kit-integration`)
 - `Program.cs`: `AddMicrosoftIdentityWebApi` bound to **multitenant** (`Instance`
   `https://login.microsoftonline.com/`, `TenantId = "organizations"`), audience =
-  `api://f41f679b…` (the reused API reg — unchanged audience, see 4.2). Remove the boot-time
+  `api://6a3e6083…` (the reused API reg — unchanged audience, see 4.2). Remove the boot-time
   `GetAzureAdConfigurationAsync("lagetronix")` call entirely.
 - Issuer validation: accept any tenant but **reject** a token whose `tid` has no provisioned Tenant
   (the tenant resolver returns 404 → middleware 403). Optionally an `IssuerValidator` that defers to
@@ -389,7 +389,7 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
 
 ### 3.1 Multitenant sign-in  ✅ DONE (typecheck-verified)
 - `app/api/auth/[...nextauth]/route.ts`: `AzureADProvider` `tenantId: "organizations"`; client id =
-  the **saas-app** registration; add the Edulynk API scope (`api://f41f679b…/access_as_user`, the
+  the **saas-app** registration; add the Edulynk API scope (`api://6a3e6083…/access_as_user`, the
   reused API reg per 4.2) to request a token usable against the API.
 - Add the FE redirect URIs to the saas-app registration (4.1).
 - **Done:** `tenantId` defaults to `"organizations"`; scope now requests the API scope (configurable via
@@ -450,18 +450,36 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
 
 ## Phase 4 — Identity & app registrations (Workforce)
 
-### 4.1 saas-app reg → the FE
-Retarget to multitenant; add FE redirect URIs (`/api/auth/callback/azure-ad`,
-signout). This is the FE's sign-in identity.
+> **⚠ CORRECTION (2026-06-17, verified against the tenant via `az ad app`):** the earlier plan said the
+> API reg was `f41f679b…`. That GUID is the **"Rapha HMS"** registration — a *different product*
+> (single-tenant, exposes `App.ReadWrite`, Vite SPA redirects). The **real Edulynk API** reg is
+> **`6a3e6083-1a43-439e-b66a-141dd7e13f70` ("Edulynk API")** — URI `api://6a3e6083…`, exposes
+> `access_as_user` (scope id `eed0fbfe-01d8-4e47-a290-c4cc448f4ae0`). The wrong GUID was corrected in the
+> API `appsettings.json` and the FE scope default/`.env.example` (commits API `80b92ae`, FE `aa35928`).
+> **Verified topology in tenant `e77b3a11…`:**
+> - FE (sign-in) = **"Edulynk"** `d27b062e-0112-45a8-9751-d54fbfa801fe` — already requests `access_as_user`
+>   on `6a3e6083…` + Graph; already has NextAuth `/api/auth/callback/azure-ad` redirect URIs (delightful-
+>   glacier, purple-sea SWA hosts + `localhost:3000`). Currently **single-tenant**.
+> - API (resource) = **"Edulynk API"** `6a3e6083…`. Currently **single-tenant**, **no** preAuthorizedApps,
+>   **no** appRoles, **no** client secret.
+> - Platform regs (for 4.3/4.4): saas-app `abdcfcc1-0217-4693-b671-5db3f2918eeb`, admin-api
+>   `2ddb6984-d793-4e10-8133-00c65b81b790`, permissions-api `7cee1ea7-3436-483d-84cf-8173537e1af9`.
+> **Decision needed:** the plan's 4.1 used the ASDK *saas-app* reg as the FE identity, but the FE is
+> already fully wired to its own **"Edulynk"** reg `d27b062e…` — recommend **keeping "Edulynk" as the FE
+> identity** (flip it multitenant) rather than re-wiring to saas-app. Confirm before mutating.
 
-### 4.2 Reuse the existing API reg `f41f679b…` (flip to multitenant)
-Reuse the existing Educ8e API app registration as the Edulynk API identity rather than minting a new
-one. Changes on `f41f679b…`:
+### 4.1 FE reg (`d27b062e…` "Edulynk") → multitenant  🟡 mostly pre-wired
+Flip `signInAudience` → `AzureADMultipleOrgs`. Redirect URIs `/api/auth/callback/azure-ad` already
+present for the current SWA hosts; add the final per-product SWA host when known (Phase 5). This is the
+FE's sign-in identity.
+
+### 4.2 Edulynk API reg `6a3e6083…` (flip to multitenant)
+Use the existing **"Edulynk API"** reg as the Edulynk API identity. Changes on `6a3e6083…`:
 - Set **`signInAudience` = `AzureADMultipleOrgs`** (single-tenant → multitenant).
-- Ensure the **Application ID URI** is `api://f41f679b…` and the exposed scope is
-  `access_as_user` (the API already validates `aud = api://f41f679b…`, so the audience is unchanged —
-  only multitenancy is added). Remove any stale single-tenant-only scopes/URIs.
-- **Pre-authorize the saas-app (FE) client** on `access_as_user` so the FE can request API tokens.
+- Application ID URI is already `api://6a3e6083…` and the exposed scope is already `access_as_user`
+  (the API validates `aud = api://6a3e6083…`), so only multitenancy is added.
+- **Pre-authorize the FE client `d27b062e…`** on `access_as_user` (currently no preAuthorizedApps) so
+  consent is streamlined.
 - Verify the API's token validation uses `TenantId = "organizations"` (Phase 2.1) so multi-tenant
   issuers are accepted.
 
@@ -471,19 +489,19 @@ one. Changes on `f41f679b…`:
 
 ### 4.3 Service-to-service app roles
 Define an app role (e.g. `Service.Access`) on **admin-api** and **permissions-api**; grant it to the
-Edulynk API app (`f41f679b…`, admin-consented) so Edulynk's client-credentials token is accepted
+Edulynk API app (`6a3e6083…`, admin-consented) so Edulynk's client-credentials token is accepted
 (Phase 2.8). The Admin API must be configured to accept app-only tokens carrying that role for the
 quota/provision/bind endpoints. Reusing the reg means this client-credentials flow needs a **client
-secret / certificate** on `f41f679b…` — the old single-tenant API never needed one. Create it here,
+secret / certificate** on `6a3e6083…` — the old single-tenant API never needed one. Create it here,
 store it in Key Vault, and add it to the Phase 7 secret-rotation list (rotate after testing).
 
 ### 4.4 Provisioning identity
 The platform → Edulynk provision call (1.3) uses the Admin API's identity with an app role on the
-Edulynk API reg (`f41f679b…`, `Provisioning.Write`). Internal provision endpoint authorizes that role
+Edulynk API reg (`6a3e6083…`, `Provisioning.Write`). Internal provision endpoint authorizes that role
 only.
 
 ### 4.5 Retire old reg
-Only the **old FE app registration** is retired after cutover. The API reg `f41f679b…` is **kept and
+Only the **old FE app registration** is retired after cutover. The API reg `6a3e6083…` is **kept and
 reused** (4.2). Confirm nothing else still depends on the old FE reg before deleting it.
 
 ---
@@ -515,8 +533,8 @@ to add/change on the existing app:
 platform — so no cross-subscription RBAC, the template default `webAppLinux` applies, and the
 per-tenant **SQL server (5.1) is co-located in that same subscription/region**.
 
-**App registration (decided):** the existing API reg `f41f679b…` is **reused**, flipped to multitenant
-(Phase 4.2) — audience unchanged (`api://f41f679b…`), so the API needs only the `signInAudience` change
+**App registration (decided):** the existing API reg `6a3e6083…` is **reused**, flipped to multitenant
+(Phase 4.2) — audience unchanged (`api://6a3e6083…`), so the API needs only the `signInAudience` change
 plus a client secret for the service-to-service flow.
 
 > Create a *new* App Service only if you deliberately want clean separation from the legacy
@@ -556,11 +574,11 @@ plus a client secret for the service-to-service flow.
   live in history) and switch to managed-identity SQL (done in 2.3). The **Service Bus SAS key** is
   still in `appsettings.json` (6 call sites read it via config) → move to a **Key Vault reference** at
   deploy + rotate. Plus any chat-shared secrets.
-- **New `f41f679b…` client secret:** the reused API reg needs a client secret/certificate (added in
+- **New `6a3e6083…` client secret:** the reused API reg needs a client secret/certificate (added in
   4.3) for the service-to-service calls — the old single-tenant API never had one. Store it in Key
   Vault and add it to this rotation list (rotate after testing, per the standing secret-hygiene rule).
 - **Retire** the old Educ8e **FE** app reg (4.5); decommission the old single-tenant deploy. The API
-  reg `f41f679b…` is **kept** (reused per 4.2).
+  reg `6a3e6083…` is **kept** (reused per 4.2).
 - Finish the paused email-notification feature (Exchange 365 mailbox creds).
 
 ---
