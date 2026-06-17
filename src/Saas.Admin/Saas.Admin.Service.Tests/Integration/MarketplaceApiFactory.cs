@@ -72,7 +72,20 @@ internal sealed class MarketplaceApiFactory : IDisposable
 
                     services.AddAuthentication(StubAuthHandler.SchemeName)
                         .AddScheme<AuthenticationSchemeOptions, StubAuthHandler>(StubAuthHandler.SchemeName, _ => { });
-                    services.AddAuthorization();
+
+                    // Mirror production's service-to-service authorization so the s2s endpoints
+                    // (by-tid resolution, quota) enforce the Service.Access app role here too.
+                    services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
+                        Saas.Admin.Service.Authorization.ServiceAppRoleAuthorizationHandler>();
+                    services.AddAuthorization(options =>
+                    {
+                        options.AddPolicy(Saas.Admin.Service.Authorization.ServiceAccessPolicy.Name, policy =>
+                        {
+                            policy.RequireAuthenticatedUser();
+                            policy.AddRequirements(new Saas.Admin.Service.Authorization.ServiceAppRoleRequirement(
+                                Saas.Admin.Service.Authorization.ServiceAccessPolicy.RoleValue));
+                        });
+                    });
 
                     services.AddControllers()
                         .AddApplicationPart(typeof(MarketplaceSubscriptionsController).Assembly);
@@ -124,8 +137,10 @@ internal sealed class MarketplaceApiFactory : IDisposable
 
 /// <summary>
 /// Test authentication scheme: if the request carries an <c>X-Test-Tid</c> header, the request is
-/// authenticated as a user of that tenant (claims mirror what Entra issues: the SAML-style and short
-/// <c>tid</c> claims plus a NameIdentifier). No header → unauthenticated, so <c>[Authorize]</c> yields 401.
+/// authenticated (claims mirror what Entra issues: the SAML-style and short <c>tid</c> claims plus a
+/// NameIdentifier, and the <c>Service.Access</c> app role so the s2s endpoints — by-tid resolution,
+/// quota — that the product API calls are reachable). No header → unauthenticated, so
+/// <c>[Authorize]</c> yields 401.
 /// </summary>
 internal sealed class StubAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
@@ -152,6 +167,8 @@ internal sealed class StubAuthHandler : AuthenticationHandler<AuthenticationSche
             new Claim("http://schemas.microsoft.com/identity/claims/tenantid", tid!),
             new Claim("tid", tid!),
             new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+            // The product API calls the s2s endpoints with an app-only token carrying this app role.
+            new Claim("roles", "Service.Access"),
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, SchemeName));
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, SchemeName)));

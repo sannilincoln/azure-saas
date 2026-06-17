@@ -507,8 +507,12 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
 - **Code nuance:** Phase 2.8 currently calls **admin-api via bearer** (`BearerTokenHandler` on catalog/
   quota → uses the `Service.Access` grant) but **permissions-api via `x-api-key`** (`ApiKeyHandler`). So
   the permissions-api `Service.Access` grant is **not yet exercised** by the code — it's provisioned so
-  permissions can migrate off the static API key to app-role auth later (more secure). admin-api must
-  still be configured to **accept app-only tokens carrying `Service.Access`** on the quota/bind endpoints.
+  permissions can migrate off the static API key to app-role auth later (more secure).
+- ✅ **admin-api acceptance DONE:** `ServiceAccessPolicy` + `ServiceAppRoleRequirement`/
+  `ServiceAppRoleAuthorizationHandler` (checks the `roles` claim for `Service.Access`); registered in
+  `Program.cs` and applied as `[Authorize(Policy = ServiceAccessPolicy.Name)]` to the s2s endpoints
+  `TenantResolutionController` (by-tid) and `TenantQuotaController` (quota) — tightened from bare
+  `[Authorize]`. The test auth stub now emits the role; handler + by-tid + quota integration tests green.
 - **⏸ Client secret DEFERRED to Phase 5:** the client-credentials flow needs a secret on `6a3e6083…`,
   but there's no Key Vault yet and the flow can't run until the API is deployed/configured. Mint it at
   deploy **straight into Key Vault** (`az ad app credential reset --id 6a3e6083… --append

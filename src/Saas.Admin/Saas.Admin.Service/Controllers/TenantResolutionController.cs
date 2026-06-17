@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Saas.Admin.Service.Authorization;
 using Saas.Admin.Service.Fulfillment;
 
 namespace Saas.Admin.Service.Controllers;
@@ -10,13 +11,12 @@ namespace Saas.Admin.Service.Controllers;
 /// caller's <c>tid</c> into the tenant it should serve and the database it should connect to.
 /// </summary>
 /// <remarks>
-/// Called service-to-service by the product API. Currently any authenticated caller is allowed;
-/// Phase 4.3 tightens this to the service app-role (app-only token) once the Admin API accepts those —
-/// the same posture as <see cref="TenantQuotaController"/>. Kept in its own controller so the
-/// marketplace-gated <see cref="ISubscriptionQueryService"/> dependency stays isolated to this
-/// endpoint (the always-on <c>TenantsController</c> must not require it).
+/// Called service-to-service by the product API, authenticated with an app-only token carrying the
+/// <c>Service.Access</c> app role (Phase 4.3). Kept in its own controller so the marketplace-gated
+/// <see cref="ISubscriptionQueryService"/> dependency stays isolated to this endpoint (the always-on
+/// <c>TenantsController</c> must not require it).
 /// </remarks>
-[Authorize]
+[Authorize(Policy = ServiceAccessPolicy.Name)]
 [ApiController]
 [Route("api/tenants/by-tid")]
 public class TenantResolutionController(ISubscriptionQueryService subscriptionQuery) : ControllerBase

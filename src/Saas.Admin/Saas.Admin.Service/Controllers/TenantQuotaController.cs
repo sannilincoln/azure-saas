@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Saas.Admin.Service.Authorization;
 using Saas.Admin.Service.Fulfillment;
 
 namespace Saas.Admin.Service.Controllers;
@@ -10,10 +11,10 @@ namespace Saas.Admin.Service.Controllers;
 /// the product owns the count.
 /// </summary>
 /// <remarks>
-/// Called service-to-service by the product API. Currently any authenticated caller is allowed;
-/// Phase 4.3 tightens this to the service app-role (app-only token) once the Admin API accepts those.
+/// Called service-to-service by the product API, authenticated with an app-only token carrying the
+/// <c>Service.Access</c> app role (Phase 4.3).
 /// </remarks>
-[Authorize]
+[Authorize(Policy = ServiceAccessPolicy.Name)]
 [ApiController]
 [Route("api/tenants/{tenantId:guid}/quota")]
 public class TenantQuotaController(ITenantQuotaService quotaService) : ControllerBase

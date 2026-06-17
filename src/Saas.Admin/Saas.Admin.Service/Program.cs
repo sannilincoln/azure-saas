@@ -86,6 +86,19 @@ builder.Services.AddScoped<IClaimsTransformation, PermissionsClaimsTransformatio
 builder.Services.AddSingleton<IAuthorizationHandler, SaasTenantPermissionAuthorizationHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, SaasUserPermissionAuthorizationHandler>();
 
+// Service-to-service: accept the product API's app-only token bearing the Service.Access app role
+// (Phase 4.3) on the s2s endpoints (tenant resolution, quota).
+builder.Services.AddSingleton<IAuthorizationHandler, Saas.Admin.Service.Authorization.ServiceAppRoleAuthorizationHandler>();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(Saas.Admin.Service.Authorization.ServiceAccessPolicy.Name, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new Saas.Admin.Service.Authorization.ServiceAppRoleRequirement(
+            Saas.Admin.Service.Authorization.ServiceAccessPolicy.RoleValue));
+    });
+});
+
 // Register the policy provider
 builder.Services.AddSingleton<IAuthorizationPolicyProvider, SaasPermissionAuthorizationPolicyProvider>();
 

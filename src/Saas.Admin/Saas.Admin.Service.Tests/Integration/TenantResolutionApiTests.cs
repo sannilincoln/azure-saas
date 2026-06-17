@@ -11,8 +11,8 @@ namespace Saas.Admin.Service.Tests.Integration;
 /// <summary>
 /// End-to-end HTTP tests of the by-tid tenant lookup the multitenant product API uses to turn a
 /// request's Entra tenant id (token <c>tid</c>) into its provisioned tenant + per-tenant database
-/// name. Service-to-service endpoint: any authenticated caller is allowed (Phase 4.3 tightens to the
-/// service app-role), unlike the publisher/customer-scoped subscriptions endpoints.
+/// name. Service-to-service endpoint: requires an app-only token bearing the <c>Service.Access</c> app
+/// role (Phase 4.3); the test auth stub supplies it. Anonymous callers get 401.
 /// </summary>
 public class TenantResolutionApiTests
 {
