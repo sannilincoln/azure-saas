@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using Saas.Identity.Authorization.Model.Data;
 using Saas.Permissions.Service.Data.Context;
 using Saas.Permissions.Service.Interfaces;
@@ -89,5 +90,39 @@ public class TenantMembershipServiceTests
         Assert.Equal(TenantBindResult.AlreadyMember, second);
         Assert.Single(db.TenantMembers);     // no duplicate member
         Assert.Single(db.SaasPermissions);   // no duplicate grant
+    }
+
+    [Fact]
+    public async Task Bind_WhenMemberExistsWithoutIdentity_FillsItOnFirstSignIn()
+    {
+        using var db = NewDb();
+        var tenantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        // Pre-created member (e.g. the tenant creator) recorded before they ever signed in.
+        db.TenantMembers.Add(new TenantMember { TenantId = tenantId, UserId = userId });
+        await db.SaveChangesAsync();
+
+        var result = await Build(db).BindMemberAsync(tenantId, userId, "Admin@School.edu", "Tenant Admin");
+
+        Assert.Equal(TenantBindResult.AlreadyMember, result);
+        var member = db.TenantMembers.Single();
+        Assert.Equal("admin@school.edu", member.Email);
+        Assert.Equal("Tenant Admin", member.DisplayName);
+    }
+
+    [Fact]
+    public async Task AddNewTenant_RecordsTheCreatorAsMember()
+    {
+        using var db = NewDb();
+        var tenantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var svc = new PermissionsService(db, NullLogger<PermissionsService>.Instance, Substitute.For<IGraphAPIService>());
+
+        await svc.AddNewTenantAsync(tenantId, userId);
+
+        // The creator is a member immediately, so they aren't denied on first sign-in (no invitation).
+        var member = db.TenantMembers.Single(m => m.TenantId == tenantId && m.UserId == userId);
+        Assert.Equal(tenantId, member.TenantId);
+        Assert.Equal(userId, member.UserId);
     }
 }

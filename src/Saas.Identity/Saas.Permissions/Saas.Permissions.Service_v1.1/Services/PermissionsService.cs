@@ -86,6 +86,14 @@ public class PermissionsService(
             UserPermissions = new UserPermission[] { newUserPermission }
         });
 
+        // Record the creator as a member so they aren't denied on first sign-in (the tenant admin has
+        // no invitation). Their email/display name are captured from their token at first bind.
+        _permissionsContext.TenantMembers.Add(new TenantMember
+        {
+            TenantId = tenantId,
+            UserId = userId,
+        });
+
         await _permissionsContext.SaveChangesAsync();
 
         return;

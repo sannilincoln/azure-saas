@@ -159,13 +159,19 @@ New test project `Saas.Permissions.Service.Tests` (4 green). Schema: the Permiss
 `EnsureCreated()` (no migrations), so a **fresh** DB picks up the two tables automatically — an
 **existing** prod DB needs a one-time `CREATE TABLE` script (Phase 5 deploy note).
 
-**Remaining wiring (follow-up slices):**
-- `invite` (Admin API) → call `CreateInvitationAsync` instead of the Graph email lookup; expose
-  `members/bind` on the Permissions service + client + an Admin API endpoint; call it on first sign-in.
-- Switch `GetTenantUsers` to read `TenantMember` (drop Graph enrichment).
-- **Admin self-binding:** `AddNewTenantAsync` should also create a `TenantMember` for the tenant
-  creator (they have no invitation), and `BindMemberAsync` should fill a pre-created member's
-  email/name on first sign-in (currently returns `AlreadyMember` without updating identity).
+**Admin self-binding — done (TDD):** `AddNewTenantAsync` now records the creator as a `TenantMember`,
+and `BindMemberAsync` fills a pre-created member's email/name on first sign-in (returns `AlreadyMember`).
+6 membership tests green.
+
+**Permissions API surface — done:** `TenantMembershipController` exposes `CreateInvitation` and
+`BindMember` (service-to-service; no generated-client dependency).
+
+**Remaining wiring (needs nswag client regen — its own slice):**
+- Regenerate `PermissionsServiceClient` to add `CreateInvitation`/`BindMember`; rewrite the Admin API
+  `invite` path to call `CreateInvitation` instead of the Graph email lookup; add an Admin API
+  `members/bind` endpoint + `AdminServiceClient` method, called by the product on first sign-in.
+- Switch `GetTenantUsers` to read `TenantMember` (drop Graph enrichment) — add
+  `GetTenantMembersAsync` + endpoint, then point the client/Admin at it.
 
 ### Tests (Phase 1)
 - Unit: tier resolution (mapped → ceiling / unmapped → 0 block / absent map → 0 block). Quota

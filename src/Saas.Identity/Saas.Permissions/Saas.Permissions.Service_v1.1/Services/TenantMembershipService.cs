@@ -26,14 +26,32 @@ public class TenantMembershipService(
 
     public async Task<TenantBindResult> BindMemberAsync(Guid tenantId, Guid userId, string email, string? displayName)
     {
-        var alreadyMember = await permissionsContext.TenantMembers
-            .AnyAsync(m => m.TenantId == tenantId && m.UserId == userId);
-        if (alreadyMember)
+        var normalized = Normalize(email);
+
+        var existingMember = await permissionsContext.TenantMembers
+            .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.UserId == userId);
+        if (existingMember is not null)
         {
+            // Already a member (e.g. the tenant creator, recorded before first sign-in). Capture their
+            // identity from the token if we don't have it yet, but don't re-grant permissions.
+            var changed = false;
+            if (string.IsNullOrWhiteSpace(existingMember.Email) && !string.IsNullOrWhiteSpace(normalized))
+            {
+                existingMember.Email = normalized;
+                changed = true;
+            }
+            if (string.IsNullOrWhiteSpace(existingMember.DisplayName) && !string.IsNullOrWhiteSpace(displayName))
+            {
+                existingMember.DisplayName = displayName;
+                changed = true;
+            }
+            if (changed)
+            {
+                await permissionsContext.SaveChangesAsync();
+            }
+
             return TenantBindResult.AlreadyMember;
         }
-
-        var normalized = Normalize(email);
         var invitation = await permissionsContext.TenantInvitations
             .FirstOrDefaultAsync(i =>
                 i.TenantId == tenantId &&
