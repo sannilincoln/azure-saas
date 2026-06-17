@@ -345,12 +345,26 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
   `EnsureCreated`) and create `cor_tenant_settings` (+ all tables) in real tenant DBs. Feature logic is
   complete + tested via InMemory.
 
-### 2.8 Service-to-service auth & secrets
+### 2.8 Service-to-service auth & secrets  ✅ DONE (TDD, `saas-kit-integration`)
 - Edulynk API → Admin/Permissions APIs: **client-credentials** app token (the endpoints take
   tenantId/userId as params, so no OBO needed). Edulynk API app reg gets an **app role** on the Admin
   API and Permissions API (see 4.3).
 - Remove all plaintext secrets from `appsettings*.json`; SQL via MI, Service Bus connection via Key
   Vault reference, config via App Configuration (managed identity), mirroring the other ASDK apps.
+- **Done:** `BearerTokenHandler` (DelegatingHandler) attaches an app-only client-credentials token (via
+  `IServiceTokenProvider` → `ITokenAcquisition.GetAccessTokenForAppAsync`, MSAL-cached) to the Admin API
+  clients (`ITenantCatalog`, `IStudentQuotaService`); `ApiKeyHandler` attaches `x-api-key` to the
+  Permissions client (`IPermissionResolver`) — matching how the platform's own Admin service calls
+  Permissions. Enabled `EnableTokenAcquisitionToCallDownstreamApi` + in-memory token cache. Config:
+  `Edulynk:AdminApiScope` + `PermissionsApiKey` (placeholders → Key Vault / App Configuration at deploy).
+  2 handler tests.
+- **Secrets:** removed the dead plaintext `ConnectionStrings:DefaultConnection` (`P@ssword`) — the
+  **second** SQL password, now gone (both out of the codebase: `Lagetronix1#` went in 2.3). The Service
+  Bus SAS key stays in `appsettings` (read at 6 call sites via config) → **Key Vault reference at
+  deploy, no code change** (Phase 5/7).
+- **Cross-repo/deploy remaining:** client secret on the Edulynk app reg + app role on the Admin API
+  (Phase 4.3) so the bearer token is issued/accepted; the Admin API accepting app-only tokens (4.3).
+  Until then the three clients are fail-closed.
 
 ### Tests (Phase 2)
 - Unit: tenant resolver rejects unknown `tid` / suspended; quota service blocks at ceiling and blocks
@@ -488,10 +502,12 @@ plus a client secret for the service-to-service flow.
   `lagetronix_rapha_dev`. (One-off script; verify counts.) **Map its ProductTier in
   `Marketplace:TierMaxStudents`** (and tier 0 if any non-marketplace tenants exist) — otherwise the
   fail-closed quota (1.1) blocks all student registration for that tenant.
-- **Rotate** the SQL passwords currently committed in `appsettings.json` (Edulynk
-  `DefaultConnection` = `P@ssword`) / `GetOrganizationConfiguration.cs` (`Lagetronix1#`) — **two
-  distinct plaintext SQL passwords** — and the Service Bus key in `appsettings.json`, and any
-  chat-shared secrets.
+- **Rotate** the secrets that were committed in git history. Both plaintext **SQL passwords are now
+  removed from the codebase** (`GetOrganizationConfiguration.cs` `Lagetronix1#` deleted in 2.3;
+  `appsettings.json` `DefaultConnection` `P@ssword` removed in 2.8) — but **rotate them anyway** (they
+  live in history) and switch to managed-identity SQL (done in 2.3). The **Service Bus SAS key** is
+  still in `appsettings.json` (6 call sites read it via config) → move to a **Key Vault reference** at
+  deploy + rotate. Plus any chat-shared secrets.
 - **New `f41f679b…` client secret:** the reused API reg needs a client secret/certificate (added in
   4.3) for the service-to-service calls — the old single-tenant API never had one. Store it in Key
   Vault and add it to this rotation list (rotate after testing, per the standing secret-hygiene rule).
