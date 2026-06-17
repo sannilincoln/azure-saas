@@ -540,10 +540,14 @@ plus a client secret for the service-to-service flow.
 7. **⚠ Edulynk migration chain is drifted (found in 2.7):** `dotnet ef migrations add` scaffolds ~323
    destructive ops — the model evolved far past the only migration's snapshot, so **migrations are not
    the schema source of truth** and `Database.MigrateAsync()` (used by provisioning 2.6) will not build
-   a correct fresh tenant schema. **Phase 5 (M2/M3) must decide the schema-provisioning strategy**
-   (baseline a fresh migration from the current model, or `EnsureCreated()`, or DACPAC) and validate
-   `cor_tenant_settings` + all tables get created in a real provisioned DB. Until then, per-tenant DBs
-   can't be stood up automatically.
+   a correct fresh tenant schema. Until fixed, per-tenant DBs can't be stood up automatically.
+   **DECISION (locked, do in Phase 5): re-baseline.** Delete the stale `InitialMigration` + snapshot,
+   generate one fresh baseline migration from the current model, and **validate it reproduces the
+   existing `lagetronix_rapha_dev` schema** (diff against the live DB so existing data isn't disturbed)
+   before relying on it. Keep migrations as the source of truth thereafter, so `MigrateAsync`-based
+   provisioning (2.6) is correct and future schema changes migrate incrementally. (Rejected:
+   `EnsureCreated()` — blocks future incremental migrations; DACPAC — extra artifact to maintain.) Must
+   run against real Azure SQL (Phase 5 infra: shared server + MI `CREATE DATABASE`).
 
 ## Suggested sequencing (milestones)
 - **M1 (platform-only, shippable):** Phase 1 + Phase 4.1–4.4. Testable with the existing marketplace
