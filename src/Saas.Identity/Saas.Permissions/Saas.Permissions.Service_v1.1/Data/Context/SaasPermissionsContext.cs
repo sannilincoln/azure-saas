@@ -8,6 +8,8 @@ public class SaasPermissionsContext(DbContextOptions<SaasPermissionsContext> opt
     public DbSet<SaasPermission> SaasPermissions { get; set; }
     public DbSet<TenantPermission> TenantPermissions { get; set; }
     public DbSet<UserPermission> UserPermissions { get; set; }
+    public DbSet<TenantInvitation> TenantInvitations { get; set; }
+    public DbSet<TenantMember> TenantMembers { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -15,5 +17,18 @@ public class SaasPermissionsContext(DbContextOptions<SaasPermissionsContext> opt
         new UserPermissionEntityTypeConfiguration().Configure(modelBuilder.Entity<UserPermission>());
         new TenantPermissionEntityTypeConfiguration().Configure(modelBuilder.Entity<TenantPermission>());
         new SaasPermissionEntityTypeConfiguration().Configure(modelBuilder.Entity<SaasPermission>());
+
+        modelBuilder.Entity<TenantInvitation>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            b.HasIndex(x => new { x.TenantId, x.Email });
+        });
+
+        modelBuilder.Entity<TenantMember>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => new { x.TenantId, x.UserId }).IsUnique();
+        });
     }
 }

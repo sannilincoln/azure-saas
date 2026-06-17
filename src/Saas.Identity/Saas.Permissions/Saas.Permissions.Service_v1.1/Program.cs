@@ -90,6 +90,10 @@ builder.Services.AddScoped<IGraphAPIService, GraphAPIService>();
 // Adding the permission service used by the API controller
 builder.Services.AddScoped<IPermissionsService, PermissionsService>();
 
+// JIT tenant membership (invite-by-email + first-sign-in bind) — replaces the Graph-based
+// email lookup for Workforce-multitenant tenants.
+builder.Services.AddScoped<ITenantMembershipService, TenantMembershipService>();
+
 builder.Logging.ClearProviders();
 
 if (builder.Environment.IsDevelopment())

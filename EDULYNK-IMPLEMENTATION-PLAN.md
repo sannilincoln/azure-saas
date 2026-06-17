@@ -150,6 +150,23 @@ login, then caches the resolved permissions (Phase 2.5).
 Exit criteria: an admin invites `bursar@school.edu`; on the bursar's first sign-in they gain the Bursar
 role and appear in the member list, with zero Graph calls into the customer's tenant.
 
+**Status — core domain logic done (TDD):** new entities `TenantInvitation` + `TenantMember`
+(`Saas.Lib/Saas.Identity`), wired into `SaasPermissionsContext`; new `ITenantMembershipService` /
+`TenantMembershipService` with `CreateInvitationAsync` (writes a Pending invite, email normalized) and
+`BindMemberAsync` (matches pending invite by email case-insensitively → grants permissions to the oid +
+records the member identity + marks Bound; idempotent; no match → `NoInvitation`). Registered in DI.
+New test project `Saas.Permissions.Service.Tests` (4 green). Schema: the Permissions DB uses
+`EnsureCreated()` (no migrations), so a **fresh** DB picks up the two tables automatically — an
+**existing** prod DB needs a one-time `CREATE TABLE` script (Phase 5 deploy note).
+
+**Remaining wiring (follow-up slices):**
+- `invite` (Admin API) → call `CreateInvitationAsync` instead of the Graph email lookup; expose
+  `members/bind` on the Permissions service + client + an Admin API endpoint; call it on first sign-in.
+- Switch `GetTenantUsers` to read `TenantMember` (drop Graph enrichment).
+- **Admin self-binding:** `AddNewTenantAsync` should also create a `TenantMember` for the tenant
+  creator (they have no invitation), and `BindMemberAsync` should fill a pre-created member's
+  email/name on first sign-in (currently returns `AlreadyMember` without updating identity).
+
 ### Tests (Phase 1)
 - Unit: tier resolution (mapped → ceiling / unmapped → 0 block / absent map → 0 block). Quota
   controller resolves status; unknown tenant → 404.
