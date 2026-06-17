@@ -70,4 +70,62 @@ public class SubscriptionQueryServiceTests
 
         Assert.Empty(result);
     }
+
+    [Fact]
+    public async Task GetTenantByCustomerTenant_ResolvesTenantViaSubscriptionPurchaserTenant()
+    {
+        using var marketplace = MarketplaceTestHelpers.NewMarketplaceDb();
+        using var tenants = MarketplaceTestHelpers.NewTenantsDb();
+
+        var customerTenantId = Guid.NewGuid();
+        var subId = Guid.NewGuid();
+        MarketplaceTestHelpers.SeedSubscription(marketplace, subId, purchaserTenantId: customerTenantId);
+        var tenant = MarketplaceTestHelpers.SeedTenant(tenants, Guid.NewGuid(), subscriptionId: subId);
+
+        var service = Build(marketplace, tenants);
+
+        var resolved = await service.GetTenantByCustomerTenantAsync(customerTenantId);
+
+        Assert.NotNull(resolved);
+        Assert.Equal(tenant.Id, resolved!.Id);
+        Assert.Equal(tenant.Route, resolved.Route);
+    }
+
+    [Fact]
+    public async Task GetTenantByCustomerTenant_PrefersActiveSubscription_WhenTenantHasMultiple()
+    {
+        using var marketplace = MarketplaceTestHelpers.NewMarketplaceDb();
+        using var tenants = MarketplaceTestHelpers.NewTenantsDb();
+
+        var customerTenantId = Guid.NewGuid();
+
+        // A cancelled-then-rebought customer: an Unsubscribed sub (seeded first) + an active one.
+        var staleSubId = Guid.NewGuid();
+        var activeSubId = Guid.NewGuid();
+        MarketplaceTestHelpers.SeedSubscription(marketplace, staleSubId, status: "Unsubscribed", purchaserTenantId: customerTenantId);
+        MarketplaceTestHelpers.SeedSubscription(marketplace, activeSubId, status: "Subscribed", purchaserTenantId: customerTenantId);
+        MarketplaceTestHelpers.SeedTenant(tenants, Guid.NewGuid(), subscriptionId: staleSubId, subscriptionStatus: "Unsubscribed");
+        var activeTenant = MarketplaceTestHelpers.SeedTenant(tenants, Guid.NewGuid(), subscriptionId: activeSubId, subscriptionStatus: "Subscribed");
+
+        var service = Build(marketplace, tenants);
+
+        var resolved = await service.GetTenantByCustomerTenantAsync(customerTenantId);
+
+        Assert.NotNull(resolved);
+        Assert.Equal(activeTenant.Id, resolved!.Id);
+    }
+
+    [Fact]
+    public async Task GetTenantByCustomerTenant_UnknownEntraTenant_ReturnsNull()
+    {
+        using var marketplace = MarketplaceTestHelpers.NewMarketplaceDb();
+        using var tenants = MarketplaceTestHelpers.NewTenantsDb();
+        MarketplaceTestHelpers.SeedSubscription(marketplace, Guid.NewGuid(), purchaserTenantId: Guid.NewGuid());
+
+        var service = Build(marketplace, tenants);
+
+        var resolved = await service.GetTenantByCustomerTenantAsync(Guid.NewGuid());
+
+        Assert.Null(resolved);
+    }
 }

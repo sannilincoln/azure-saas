@@ -14,6 +14,16 @@ public interface ISubscriptionQueryService
     Task<IReadOnlyList<SubscriptionDto>> GetByCustomerTenantAsync(Guid customerTenantId);
 
     /// <summary>
+    /// Resolves the product <see cref="Saas.Admin.Service.Data.Tenant"/> for a customer's Entra tenant
+    /// id (the buyer's home tenant, captured as <c>Subscriptions.PurchaserTenantId</c> at resolve time).
+    /// This is the <c>tid → Tenant</c> lookup the multitenant product API needs: there is no direct
+    /// column linking them, so it joins via the subscription. Returns null when no provisioned tenant
+    /// exists for that Entra tenant. When the Entra tenant has multiple subscriptions, prefers an
+    /// active (Subscribed) one, then the most recent.
+    /// </summary>
+    Task<Saas.Admin.Service.Data.Tenant?> GetTenantByCustomerTenantAsync(Guid customerTenantId);
+
+    /// <summary>
     /// Re-pull a subscription's live state from Microsoft and update the local row (status, plan,
     /// quantity), keeping the denormalized tenant status in sync. Publisher console only.
     /// </summary>

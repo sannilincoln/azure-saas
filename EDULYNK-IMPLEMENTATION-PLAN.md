@@ -49,10 +49,17 @@ Phases 1 and 4 are the critical path and have no product-code dependencies — s
 
 ---
 
-## Phase 1 — Platform seam (Admin API)
+## Phase 1 — Platform seam (Admin API)  ✅ CHECKPOINTED (2026-06-17)
 
 Goal: expose everything Edulynk needs from the platform, and call Edulynk at activation. No Edulynk
 code required to land/test this phase.
+
+> **Checkpoint status:** the write-path + membership seam is **done and committed** — quota endpoint
+> (1.1), Tenant `DatabaseName` + migration (1.2), provisioning hook at activation (1.3, Noop until the
+> HTTP impl lands with 2.6), seat-stays-Noop (1.4), and the full JIT invite→bind round-trip (1.5:
+> entities, `TenantMembershipService`, Permissions controller, hand-written `ITenantMembershipClient`,
+> Admin `invite` rewrite + `members/bind` endpoint). 35 Admin marketplace/integration tests + 6
+> Permissions membership tests green. **One item deferred** (see 1.5 below). Moving to Phase 2.
 
 ### 1.1 Student ceiling map + quota endpoint
 - `Saas.Lib/Saas.Shared/Options/MarketplaceOptions.cs`: add
@@ -178,11 +185,12 @@ so a user can only bind themselves; auth-only (no tenant permission, since the u
 Calls `ITenantMembershipClient.BindMemberAsync`. Assumes the caller presents the user's token
 (passthrough/OBO — Phase 2.1/4). Controller test green.
 
-**Remaining wiring (one item, its own slice — entangled with the generated AdminServiceClient + the
-SignupAdmin member-list UI):**
+**DEFERRED (one item, its own slice — entangled with the generated AdminServiceClient + the
+SignupAdmin member-list UI; not on the Phase 2 critical path):**
 - Switch `GetTenantUsers` to read `TenantMember` (drop Graph enrichment) — add `GetTenantMembers` on
   the Permissions service + the membership client, then point the Admin consumption (and the console)
-  at it.
+  at it. The write path (invite + bind) no longer touches Graph; this is the read/listing path. Picked
+  up after Phase 2, or whenever the SignupAdmin member-list UI is next touched.
 
 ### Tests (Phase 1)
 - Unit: tier resolution (mapped → ceiling / unmapped → 0 block / absent map → 0 block). Quota
@@ -211,10 +219,24 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
 
 ### 2.2 Tenant resolution (replaces OrganizationConfiguration)
 - New `ITenantContextAccessor` (scoped): reads `tid`/`oid`/`email`/`name` from the validated token.
-- New `ITenantCatalog`: given `tid`, calls Admin API `tenantinfo` → `{ tenantId, route, databaseName,
-  subscriptionStatus }`; **cached** (IMemoryCache, ~5 min). Rejects unknown `tid` and
+  **DONE (TDD, `saas-kit-integration`):** `Domain/Common/Identity/TenantContextAccessor`, tolerates URI +
+  short claim forms, fail-closed when no tid/oid. 3 green.
+- New `ITenantCatalog`: given `tid`, calls the Admin API **by-tid** endpoint → `{ id, route,
+  databaseName, subscriptionStatus }`; **cached** (IMemoryCache, ~5 min). Rejects unknown `tid` and
   `Suspended/Unsubscribed` status (→ 403, mirrors `RequireActiveSubscriptionMiddleware`).
 - Delete `GetOrganizationConfiguration.cs` and its hardcoded list (and the plaintext passwords).
+
+> **Platform-side dependency added (DONE, TDD, this repo `core-app-integration`).** The plan originally
+> said the catalog "calls `tenantinfo`", but `tenantinfo/{route}` is keyed by **route** and
+> **user-permission-gated** — there is no `tid → Tenant` lookup and no service-callable variant. The
+> platform Tenant has no `tid` column either; the customer's Entra tid is captured on
+> `Subscriptions.PurchaserTenantId` (at resolve). So the resolution joins
+> `tid → Subscription.PurchaserTenantId → AmpsubscriptionId → Tenant.SubscriptionId`. Added:
+> `SubscriptionQueryService.GetTenantByCustomerTenantAsync(tid)` (prefers an active subscription, then
+> most recent) + new `TenantResolutionController` `GET /api/tenants/by-tid/{tid}` returning
+> `TenantInfoDTO`. `[Authorize]` (any authenticated caller) like the quota endpoint — Phase 4.3
+> tightens both to the service app-role. 6 unit + 3 integration tests green; 47-test marketplace/
+> integration suite green.
 
 ### 2.3 Per-tenant DbContext (managed-identity connection)
 - Replace the static `AddDbContext` (`DependencyInjection.cs`) with a **scoped** connection resolved

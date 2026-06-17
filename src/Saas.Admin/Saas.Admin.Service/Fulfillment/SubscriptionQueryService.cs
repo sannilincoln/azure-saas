@@ -25,6 +25,37 @@ public class SubscriptionQueryService(
         return await ProjectAsync(subscriptions);
     }
 
+    public async Task<Tenant?> GetTenantByCustomerTenantAsync(Guid customerTenantId)
+    {
+        // Order candidate subscriptions so an active one wins over a stale (e.g. cancelled-then-rebought)
+        // one, then most recent — so a re-purchase resolves to the live tenant, not a dead one.
+        var ampIds = await marketplaceDb.Subscriptions.AsNoTracking()
+            .Where(s => s.PurchaserTenantId == customerTenantId)
+            .OrderByDescending(s => s.IsActive)
+            .ThenByDescending(s => s.CreateDate)
+            .Select(s => s.AmpsubscriptionId)
+            .ToListAsync();
+
+        if (ampIds.Count == 0)
+        {
+            return null;
+        }
+
+        var tenants = await tenantsDb.Tenants.AsNoTracking()
+            .Where(t => t.SubscriptionId != null && ampIds.Contains(t.SubscriptionId!.Value))
+            .ToDictionaryAsync(t => t.SubscriptionId!.Value, t => t);
+
+        foreach (var ampId in ampIds)
+        {
+            if (tenants.TryGetValue(ampId, out var tenant))
+            {
+                return tenant;
+            }
+        }
+
+        return null;
+    }
+
     public async Task<SubscriptionDto?> RefreshFromMarketplaceAsync(Guid subscriptionId)
     {
         var subscription = await marketplaceDb.Subscriptions

@@ -55,7 +55,8 @@ internal static class MarketplaceTestHelpers
         Guid tenantId,
         Guid? subscriptionId = null,
         string? subscriptionStatus = null,
-        int productTierId = 0)
+        int productTierId = 0,
+        string? databaseName = null)
     {
         var tenant = new Tenant
         {
@@ -69,6 +70,7 @@ internal static class MarketplaceTestHelpers
             CreatedTime = DateTime.UtcNow,
             SubscriptionId = subscriptionId,
             SubscriptionStatus = subscriptionStatus,
+            DatabaseName = databaseName,
         };
         db.Tenants.Add(tenant);
         db.SaveChanges();
