@@ -138,8 +138,10 @@ if (!string.IsNullOrWhiteSpace(marketplaceConnectionString))
     // alongside the marketplace DB so the feature is all-or-nothing per environment.
     builder.Services.AddMarketplaceFulfillment(builder.Configuration);
 
-    // Real per-seat enforcement (overrides the no-op above for this environment).
-    builder.Services.AddScoped<IMarketplaceSeatService, MarketplaceSeatService>();
+    // NOTE: the user-seat gate (MarketplaceSeatService) is deliberately NOT registered. This product
+    // gates on Students (enforced product-side against the tenant quota), not on login users, so staff
+    // invites must stay uncapped — the Noop seat guard above remains active. MarketplaceSeatService is
+    // kept in the tree (and unit-tested) for products that DO sell per-seat; wire it back here for those.
 }
 
 var app = builder.Build();

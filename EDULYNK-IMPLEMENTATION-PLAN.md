@@ -89,10 +89,12 @@ code required to land/test this phase.
   app-role exist. Open decision still: short-retry-sync vs. queue via the existing Service Bus; and
   whether to mark the tenant `ProvisioningPending` on failure.
 
-### 1.4 Seat service stays Noop
-- **No change** to `Program.cs:138`. We gate students (in Edulynk), not users. Leave the user-seat
-  gate unregistered so invites are uncapped. (Keep `MarketplaceSeatService` in the tree, unused, for
-  products that DO sell per-seat.)
+### 1.4 Seat service stays Noop  ✅
+- **Done:** **removed** the `IMarketplaceSeatService → MarketplaceSeatService` registration that the
+  marketplace block previously added (the original plan's "no change" was wrong — that registration
+  *activated* the user-seat cap). The Noop guard registered earlier now stays active, so staff invites
+  are uncapped. We gate Students product-side, not users. `MarketplaceSeatService` is kept in the tree
+  (and unit-tested) for products that DO sell per-seat — wire it back there for those.
 
 ### 1.5 Membership under multitenant — JIT binding (the Graph landmine)
 
