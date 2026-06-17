@@ -105,6 +105,23 @@ builder.Services.AddHttpClient<IPermissionsServiceClient, PermissionsServiceClie
         client.DefaultRequestHeaders.Add("x-api-key", apiKey);
     });
 
+// Focused client for the Permissions service's JIT membership endpoints (same base URL + api key).
+builder.Services.AddHttpClient<Saas.Admin.Service.Membership.ITenantMembershipClient, Saas.Admin.Service.Membership.TenantMembershipClient>()
+    .ConfigureHttpClient((serviceProvider, client) =>
+    {
+        using var scope = serviceProvider.CreateScope();
+
+        var baseUrl = scope.ServiceProvider.GetRequiredService<IOptions<EntraPermissionsApiOptions>>().Value.BaseUrl
+            ?? throw new NullReferenceException("Permissions Base Url cannot be null");
+
+        var apiKey = scope.ServiceProvider.GetRequiredService<IOptions<PermissionsApiOptions>>().Value.ApiKey
+            ?? throw new NullReferenceException("Permissions Base Api Key cannot be null");
+
+        client.BaseAddress = new Uri(baseUrl);
+
+        client.DefaultRequestHeaders.Add("x-api-key", apiKey);
+    });
+
 // Using Entity Framework for accessing permission data stored in the Permissions Db.
 builder.Services.AddDbContext<TenantsContext>(options =>
 {

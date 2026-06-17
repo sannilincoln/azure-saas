@@ -4,6 +4,7 @@ using Saas.Identity.Authorization.Model.Data;
 using Saas.Identity.Authorization.Model.Kind;
 using Saas.Identity.Authorization.Requirement;
 using Saas.Admin.Service.Fulfillment;
+using Saas.Admin.Service.Membership;
 using Saas.Permissions.Client;
 using System.Net.Mime;
 
@@ -17,6 +18,7 @@ public class TenantsController : ControllerBase
     private readonly ITenantService _tenantService;
     private readonly IPermissionsServiceClient _permissionsServiceClient;
     private readonly IMarketplaceSeatService _seatService;
+    private readonly ITenantMembershipClient _membershipClient;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger _logger;
 
@@ -24,6 +26,7 @@ public class TenantsController : ControllerBase
         ITenantService tenantService,
         IPermissionsServiceClient permissionService,
         IMarketplaceSeatService seatService,
+        ITenantMembershipClient membershipClient,
         IHttpContextAccessor httpContextAccessor,
         ILogger<TenantsController> logger)
     {
@@ -32,6 +35,7 @@ public class TenantsController : ControllerBase
         _tenantService = tenantService;
         _permissionsServiceClient = permissionService;
         _seatService = seatService;
+        _membershipClient = membershipClient;
     }
 
     /// <summary>
@@ -433,7 +437,11 @@ public class TenantsController : ControllerBase
             return Conflict(ex.Message);
         }
 
-        await _permissionsServiceClient.AddUserPermissionsToTenantByEmailAsync(
+        // Record a pending invitation by email. Under Workforce multitenant the invitee lives in the
+        // customer's own directory and cannot be resolved via the publisher's Graph, so we do NOT look
+        // them up here — they are bound to their real object id on first sign-in (JIT). The granted
+        // permissions are preserved from the previous behavior (Admin); a per-role invite is Phase 2.5.
+        await _membershipClient.CreateInvitationAsync(
             tenantId,
             userEmail,
             new string[] { TenantPermissionKind.Admin.ToString() });

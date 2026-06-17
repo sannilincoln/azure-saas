@@ -166,12 +166,17 @@ and `BindMemberAsync` fills a pre-created member's email/name on first sign-in (
 **Permissions API surface — done:** `TenantMembershipController` exposes `CreateInvitation` and
 `BindMember` (service-to-service; no generated-client dependency).
 
-**Remaining wiring (needs nswag client regen — its own slice):**
-- Regenerate `PermissionsServiceClient` to add `CreateInvitation`/`BindMember`; rewrite the Admin API
-  `invite` path to call `CreateInvitation` instead of the Graph email lookup; add an Admin API
-  `members/bind` endpoint + `AdminServiceClient` method, called by the product on first sign-in.
+**Cross-service client — done (hand-written, no nswag):** nswag CLI isn't available and its spec is a
+hand-maintained embedded JSON, so instead of regenerating `PermissionsServiceClient` we added a focused
+typed `ITenantMembershipClient` in the Admin service (same Permissions base URL + x-api-key). The Admin
+API `invite` path now calls `CreateInvitationAsync` (JIT pending invitation) instead of the Graph email
+lookup. Controller test green; 35 Admin marketplace/integration tests green.
+
+**Remaining wiring (follow-up):**
+- Add an Admin API `members/bind` endpoint (→ `ITenantMembershipClient.BindMemberAsync`) for the
+  product to call on first sign-in.
 - Switch `GetTenantUsers` to read `TenantMember` (drop Graph enrichment) — add
-  `GetTenantMembersAsync` + endpoint, then point the client/Admin at it.
+  `GetTenantMembersAsync` + endpoint, then point the Admin consumption at it.
 
 ### Tests (Phase 1)
 - Unit: tier resolution (mapped → ceiling / unmapped → 0 block / absent map → 0 block). Quota
