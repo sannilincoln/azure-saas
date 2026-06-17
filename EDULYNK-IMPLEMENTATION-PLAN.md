@@ -271,13 +271,20 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
   password remains — still on the Phase 7 rotation list; goes once 2.6/2.8 settle design-time
   migrations + secrets.)
 
-### 2.4 Student ceiling enforcement
+### 2.4 Student ceiling enforcement  ✅ DONE (TDD, `saas-kit-integration`)
 - New `IStudentQuotaService`: calls Admin API `GET /tenants/{id}/quota` (cached ~5 min) → `maxStudents`.
 - Enforce at **student create** and **bulk import** in `StudentRepository`/`StudentService`: if
   `currentCount + incoming > maxStudents` → throw `StudentLimitExceededException` → API returns **403**
   with an upgrade message. **Fail-closed:** `maxStudents == 0` blocks every student (matches the
   platform's unmapped-tier behavior) — there is no "unlimited" interpretation of 0.
 - `currentCount` is a cheap `COUNT(*)` on the tenant DB.
+- **Done:** `StudentCeiling` (Domain, pure fail-closed rule: 0 blocks all, allows up to & including the
+  ceiling, zero-add is a no-op — 5 tests) + `StudentLimitExceededException`. `StudentQuotaService`
+  (`Data/Platform`) reads the ceiling for the resolved tenant, cached; fail-closed (unresolved / 404 →
+  0; 4 tests). `StudentService` overrides `CreateAsync`/`ImportAsync` to enforce before the base write
+  (count via new `IStudentRepository.CountAsync`; 3 tests). `StudentLimitExceededMiddleware` maps the
+  exception → 403 + message (2 tests). Quota client uses the same Admin base URL — s2s auth header is
+  Phase 2.8 (401s until then).
 
 ### 2.5 RBAC (per-request permissions)
 - New `IPermissionResolver`: calls Permissions API
