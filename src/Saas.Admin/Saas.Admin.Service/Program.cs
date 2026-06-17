@@ -65,8 +65,12 @@ builder.Services.Configure<SaasAuthorizationOptions>(
 
 builder.Services.AddHttpContextAccessor();
 
-// Add authentication for incoming requests
-builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration, EntraAdminApiOptions.SectionName);
+// Add authentication for incoming requests. Token acquisition is enabled so the Admin API can also
+// acquire app-only tokens for downstream product APIs (e.g. the Phase 1.3 provisioning call, which
+// authenticates as this app's identity carrying the granted Provisioning.Write app role).
+builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration, EntraAdminApiOptions.SectionName)
+    .EnableTokenAcquisitionToCallDownstreamApi()
+    .AddInMemoryTokenCaches();
 
 // Entra External ID: a single IClaimsTransformation that (1) maps the 'oid' claim into
 // NameIdentifier so the authorization handlers (which read ClaimTypes.NameIdentifier as a

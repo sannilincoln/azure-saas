@@ -81,7 +81,7 @@ code required to land/test this phase.
 - `Controllers/TenantInfoDTO.cs`: surface `DatabaseName` so `tenantinfo/{route}` and the by-id path
   return it. `Saas.Admin.Client` is regenerated from the nswag spec (it's a generated client).
 
-### 1.3 Provisioning hook at activation  ✅ (HTTP impl deferred)
+### 1.3 Provisioning hook at activation  ✅ DONE (HTTP impl landed)
 - **Done:** `ActivateAsync` now chooses the database name from a **configurable prefix**
   (`MarketplaceOptions.TenantDatabaseNamePrefix` → `"{prefix}-{route}"`, kept product-agnostic — the
   product name is config, not a literal in the platform), persists it on the tenant, then calls
@@ -90,11 +90,23 @@ code required to land/test this phase.
   provisioning failure propagates (unlike the best-effort email notify).
 - **Done:** `IProductProvisioningService` + `NoopProductProvisioningService` (default, registered in
   `Program.cs`); `MarketplaceFulfillmentService` takes it as a dependency.
-- **Remaining (depends on 2.6 + 4.4):** the real `HttpProductProvisioningService` — `POST` to the
-  Edulynk internal provision endpoint, app-to-app auth, idempotent, with a short retry. Register it in
-  `MarketplaceServiceCollectionExtensions` (overriding the Noop) once the product endpoint + service
-  app-role exist. Open decision still: short-retry-sync vs. queue via the existing Service Bus; and
-  whether to mark the tenant `ProvisioningPending` on failure.
+- **Done (TDD, commit pending):** `HttpProductProvisioningService` — POSTs `{DatabaseName}` to
+  `POST {BaseUrl}/internal/tenants/{tenantId}/provision`, app-to-app auth via
+  `IServiceTokenProvider` (prod = `TokenAcquisitionServiceTokenProvider`, app-only token for the
+  product API scope). **Short-retry-sync chosen** (the 2.6 endpoint is idempotent; transient 5xx/408/429
+  retried `MaxRetries` times, terminal 4xx throws immediately, retries-exhausted throws). Failure
+  **propagates** (`ProductProvisioningException`) — `ActivateAsync` does not swallow it. 4 unit tests
+  (happy path + URL/body/bearer, retry-then-succeed, terminal-no-retry, exhausted-retries).
+- **Wiring:** registered in `AddMarketplaceFulfillment` **only when `ProductProvisioning:BaseUrl` is set**
+  (overrides the Noop; absent ⇒ stays Noop). Enabled `EnableTokenAcquisitionToCallDownstreamApi()`
+  `.AddInMemoryTokenCaches()` on the Admin API auth so it can mint app tokens.
+- **Config (App Config / Key Vault at deploy):** `ProductProvisioning:BaseUrl` = Edulynk API host,
+  `ProductProvisioning:Scope` = `api://6a3e6083…/.default`, optional `MaxRetries`/`RetryDelaySeconds`.
+  **Needs a client secret on the Admin API reg** (`2ddb6984…`) for `GetAccessTokenForAppAsync` — mint
+  into Key Vault at deploy (same deferral as the Edulynk s2s secret; Phase 5/7).
+- **Decision still open (deferred):** marking the tenant `ProvisioningPending` on failure — not done;
+  today a failure propagates to the activation caller. Queue-via-Service-Bus rejected for now (sync
+  retry is sufficient given the idempotent endpoint).
 
 ### 1.4 Seat service stays Noop  ✅
 - **Done:** **removed** the `IMarketplaceSeatService → MarketplaceSeatService` registration that the

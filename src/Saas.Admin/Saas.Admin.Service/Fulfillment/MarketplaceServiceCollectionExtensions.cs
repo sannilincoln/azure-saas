@@ -63,6 +63,19 @@ public static class MarketplaceServiceCollectionExtensions
         services.AddScoped<IMarketplaceNotificationSettingsStore, MarketplaceNotificationSettingsStore>();
         services.AddScoped<IMarketplaceNotificationService, SmtpMarketplaceNotificationService>();
 
+        // Real product provisioning (Phase 1.3): when a product provisioning endpoint is configured,
+        // register the HTTP provisioner (overriding the Noop in Program.cs). It POSTs to the product's
+        // internal provision endpoint, authenticating app-to-app as this API's identity. Absent a
+        // BaseUrl, provisioning stays a no-op (products without a database-per-tenant model).
+        var provisioningOptions = configuration.GetSection(ProductProvisioningOptions.SectionName).Get<ProductProvisioningOptions>();
+        if (!string.IsNullOrWhiteSpace(provisioningOptions?.BaseUrl))
+        {
+            services.Configure<ProductProvisioningOptions>(configuration.GetSection(ProductProvisioningOptions.SectionName));
+            services.AddScoped<IServiceTokenProvider, TokenAcquisitionServiceTokenProvider>();
+            services.AddHttpClient<IProductProvisioningService, HttpProductProvisioningService>()
+                .ConfigureHttpClient(client => client.BaseAddress = new Uri(provisioningOptions.BaseUrl!));
+        }
+
         // Read/manage layer behind the in-app publisher console + customer self-service.
         services.AddScoped<ISubscriptionQueryService, SubscriptionQueryService>();
 
