@@ -380,9 +380,12 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
 > config + `test` scripts. FE work is TDD'd where it's unit-testable (logic/hooks); NextAuth/config is
 > typecheck-verified. FE suite: 10 green.
 >
-> **⚠ Pre-existing build issue found:** `app/api/auth/[...nextauth]/route.ts` has a stray
-> `export const authOptions = {…}` that violates Next's route-module contract (`.next/types` TS2344) —
-> likely breaks `next build`. Predates this work; remove it during the 3.2 pass.
+> **✅ Stray `authOptions` resolved (commit `a217571`):** the real NextAuth config was extracted to
+> `app/api/auth/[...nextauth]/options.ts`; `route.ts` now only exports GET/POST (route-module contract).
+> NOTE: `next.config` sets `typescript.ignoreBuildErrors:true` + `eslint.ignoreDuringBuilds:true`, so
+> `next build` does NOT typecheck — the stray export wouldn't have failed the build, but removing it is
+> still the correct App Router pattern (and `get-embed-token` was passing a broken provider-less stub to
+> `getServerSession`). FE suite now 14 green; `next build` compiles clean (23 routes).
 
 ### 3.1 Multitenant sign-in  ✅ DONE (typecheck-verified)
 - `app/api/auth/[...nextauth]/route.ts`: `AzureADProvider` `tenantId: "organizations"`; client id =
@@ -393,7 +396,7 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
   `AZURE_AD_API_SCOPE`). Kept `decoded.roles` for now so the current role UI works until the 3.2
   call-site migration. *Validation needs the saas-app reg redirect URIs + API reg pre-auth (4.1/4.2).*
 
-### 3.2 Permission-based gating (replace Entra roles)  🟡 PARTIAL
+### 3.2 Permission-based gating (replace Entra roles)  ✅ DONE
 - `app/context/roleSelection-context.tsx` + `lib/withAuth.tsx`: stop reading `decoded.roles` from the
   Entra token. Instead fetch permissions from the Edulynk API (which proxies the Permissions API for
   the signed-in user+tenant) once per session; gate UI on permission strings.
@@ -404,9 +407,13 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
   3 tests) — the FE previously sent **no token** to the API; `permissions.me()` + `loadUserPermissions`.
   **Backend (API branch):** `GET /api/me/permissions` (`MeController`, reuses `IPermissionResolver`;
   1 test).
-- **Remaining (the big, entangled pass):** wire `PermissionsProvider` into the app provider tree; migrate
-  all call sites off role-based `hasPermission`/`selectedRole`/`availableRoles` (`roleSelection-context`,
-  `withAuth`, sidebar, dashboards) to `can(...)`; keep role for display. Validate with `next build`.
+- **Done (call-site migration, commit `a217571`):** `PermissionsProvider(loadUserPermissions)` wired into
+  the provider tree (`components/ui/chakra-provider.tsx`). `lib/withAuth.tsx` `withAuth`/`RoleGuard` now
+  gate on `usePermissions().can` (permission strings); added `PermissionGuard`, kept `RoleGuard` as a
+  deprecated alias; fail-closed while perms load (4 RTL tests, `lib/withAuth.test.tsx`). Role kept for
+  **display only** — nav-user switcher, sidebar nav, dashboard variant intentionally untouched. The
+  gating layer was thin in practice (no page actively used `withAuth` — billing's was commented out).
+  Validated: `next build` compiles clean.
 
 ### 3.3 Tenant Settings instead of env
 - Power BI report/workspace IDs (the ~12 `*_REPORT_ID` env vars) move to a `GET /api/tenant-settings`
