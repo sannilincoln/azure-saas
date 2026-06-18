@@ -350,12 +350,12 @@ that consumes the platform. Replaces the hardcoded `GetOrganizationConfiguration
   `tenant.settings.read`/`write` (admin-only — only Admin's `*`; 2 tests). Added
   `ApplicationDbContextFactory` (`IDesignTimeDbContextFactory`) so EF tooling can build the per-request
   context. The FE switch (3.3) consumes `GET /api/tenant-settings` instead of `process.env`.
-- **⚠ Migration deferred to Phase 5 (real infra):** `dotnet ef migrations add` scaffolded **323
-  destructive ops** — the Educ8e **migration chain is drifted from the model** (stale snapshot; not the
-  schema source of truth). So provisioning's `Database.MigrateAsync()` (2.6) will **not** build a correct
-  fresh schema. Phase 5 must decide the schema-provisioning strategy (baseline migration vs
-  `EnsureCreated`) and create `cor_tenant_settings` (+ all tables) in real tenant DBs. Feature logic is
-  complete + tested via InMemory.
+- **✅ Migration re-baselined (Phase 5, commit `2420fbe`):** the drifted chain (the 2024-09-25
+  `InitialMigration` + stale `CoreDbContextModelSnapshot`, which made `migrations add` scaffold ~323
+  destructive ops) was replaced by a single regenerated **`InitialCreate`** from the current
+  `ApplicationDbContext` model — 35 tables incl. `cor_tenant_settings`, `Up()` = `CreateTable` only.
+  Provisioning's `Database.MigrateAsync()` (2.6) now builds a correct fresh schema on an empty tenant DB.
+  Legacy DBs are handled separately in Phase 7 (data migration), not by applying this in place.
 
 ### 2.8 Service-to-service auth & secrets  ✅ DONE (TDD, `saas-kit-integration`)
 - Edulynk API → Admin/Permissions APIs: **client-credentials** app token (the endpoints take
@@ -629,17 +629,16 @@ plus a client secret for the service-to-service flow.
    sync-with-retry vs Service Bus queue (1.3) and what the buyer sees meanwhile. **Resolved (2.6):**
    sync-with-retry — the Edulynk endpoint is idempotent; transient-retry lives in the platform's HTTP
    caller.
-7. **⚠ Edulynk migration chain is drifted (found in 2.7):** `dotnet ef migrations add` scaffolds ~323
-   destructive ops — the model evolved far past the only migration's snapshot, so **migrations are not
-   the schema source of truth** and `Database.MigrateAsync()` (used by provisioning 2.6) will not build
-   a correct fresh tenant schema. Until fixed, per-tenant DBs can't be stood up automatically.
-   **DECISION (locked, do in Phase 5): re-baseline.** Delete the stale `InitialMigration` + snapshot,
-   generate one fresh baseline migration from the current model, and **validate it reproduces the
-   existing `lagetronix_rapha_dev` schema** (diff against the live DB so existing data isn't disturbed)
-   before relying on it. Keep migrations as the source of truth thereafter, so `MigrateAsync`-based
-   provisioning (2.6) is correct and future schema changes migrate incrementally. (Rejected:
-   `EnsureCreated()` — blocks future incremental migrations; DACPAC — extra artifact to maintain.) Must
-   run against real Azure SQL (Phase 5 infra: shared server + MI `CREATE DATABASE`).
+7. **✅ Edulynk migration chain re-baselined (was drifted; commit `2420fbe`):** the stale
+   `InitialMigration` + `CoreDbContextModelSnapshot` (which made `migrations add` scaffold ~323
+   destructive ops) were deleted and replaced with one regenerated **`InitialCreate`** from the current
+   model (35 tables incl. `cor_tenant_settings`; `Up()` = `CreateTable` only). Migrations are the schema
+   source of truth again, so `MigrateAsync`-based provisioning (2.6) builds a correct fresh tenant schema
+   and future changes migrate incrementally. (Rejected: `EnsureCreated()`/DACPAC.) **Still to validate at
+   Phase 5 infra time:** apply against real Azure SQL (shared server + MI `CREATE DATABASE`) and confirm
+   the legacy `lagetronix_rapha_dev` schema is reconciled via the Phase 7 data migration (the new baseline
+   is **not** applied in place to the legacy DB). Decimal-precision warnings on several money columns
+   (default `decimal(18,2)`) noted — pre-existing model nits, optionally tightened later.
 
 ## Suggested sequencing (milestones)
 - **M1 (platform-only, shippable):** Phase 1 + Phase 4.1–4.4. Testable with the existing marketplace
