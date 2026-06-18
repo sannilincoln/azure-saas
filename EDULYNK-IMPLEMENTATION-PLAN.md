@@ -549,11 +549,12 @@ to add/change on the existing app:
   platform Key Vault and the SQL rights from 5.1 (CREATE DATABASE + per-DB user).
 - **App Configuration:** add the platform App Configuration endpoint as an app setting so it reads
   `Edulynk:*` config.
-- **Pipeline:** the current `azure-pipelines.yml` is **build-only** (publishes a `drop` artifact;
-  deploy is a separate/classic release). Replace it with a consolidated build-and-deploy YAML modeled
-  on the shared `templates/deploy-app.yml` (project `…/Lagetronix.Connector.API.csproj`,
-  `appType: webAppLinux`), pointing `AzureWebApp@1` at the **existing** app name, with its own path
-  filters.
+- **Pipeline:** ✅ DONE (Edulynk repo commit `562ea3e`) — `azure-pipelines.yml` replaced with a
+  consolidated build-and-deploy YAML (UseDotNet 8.x → `dotnet publish` zip → `AzureWebApp@1`
+  `webAppLinux`), modeled on the shared template, targeting the **existing** app. `azureSubscription`
+  + `webAppName` set via pipeline vars/variable group at deploy; tests deferred to a separate CI
+  pipeline (repo has known reds). **Still needs (infra/deploy):** MI enablement + KV/SQL RBAC, App
+  Configuration endpoint app setting, and the var values.
 
 **Confirmed placement:** the existing App Service is **Linux** and in the **same subscription** as the
 platform — so no cross-subscription RBAC, the template default `webAppLinux` applies, and the
@@ -566,10 +567,13 @@ plus a client secret for the service-to-service flow.
 > Create a *new* App Service only if you deliberately want clean separation from the legacy
 > single-tenant deployment.
 
-### 5.3 FE pipeline (SWA)
-- `.azuredevops/edulynk-web.yml` using the `AzureStaticWebApp` task (crib from the existing SWA
-  workflow files in the FE repo). `NEXT_PUBLIC_*` injected at build; server settings via SWA app
-  settings.
+### 5.3 FE pipeline (SWA)  ✅ DONE
+- ✅ (FE repo) `.azuredevops/edulynk-web.yml` using `AzureStaticWebApp@0` with **`output_location: ""`**
+  + `api_location: ""` (HYBRID Next.js — the auto-generated root `azure-static-web-apps-*.yml` use
+  `output_location: "out"` = static export, which can't run this app). `NEXT_PUBLIC_API_URL` injected at
+  build via task `env:`; server-runtime secrets are SWA **application settings** (see `.env.example` /
+  `DEPLOYMENT-SWA.md`). **Still needs (deploy):** the SWA resource + its deploy token
+  (`AZURE_STATIC_WEB_APPS_API_TOKEN`) and the SWA app settings populated.
 
 ### 5.4 Config & secrets
 - App Configuration: `Edulynk:Sql:Server`, `Edulynk:AdminApiUrl`, `Edulynk:PermissionsApiUrl`, the
