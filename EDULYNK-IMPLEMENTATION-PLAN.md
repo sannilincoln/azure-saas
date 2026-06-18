@@ -563,13 +563,15 @@ to add/change on the existing app:
 `Rapha-Backend`, host `educ8e-connector-app.azurewebsites.net`), same subscription
 (`a353af1c-9dd6-4de9-af57-3bae4b638eee`) as the platform. SQL server (5.1) co-located, same region.
 
-**✅ Infra provisioned (MI + RBAC):** system-assigned MI enabled on `educ8e-connector-app`
-(`1de0eab3-761e-4bb1-9865-3fa0b0bff4cb`); granted **Key Vault Secrets User** on `kv-asdk-test-x16w` and
-**App Configuration Data Reader** on `appconfig-asdk-test-x16w`. **Still to do (deploy config):** App
-Service **application settings** (`Edulynk__Sql__Server`, `Edulynk__AdminApiUrl`,
-`Edulynk__PermissionsApiUrl`, `Edulynk__AdminApiScope`, and `AzureAd__ClientSecret` as a KV reference to
-`edulynk-api-s2s`); set the ADO pipeline vars `azureSubscription` (ARM service connection) + `webAppName`
-= `educ8e-connector-app`.
+**✅ Infra + app settings provisioned:** system-assigned MI on `educ8e-connector-app`
+(`1de0eab3…`) with KV Secrets User + App Config Data Reader. **App settings SET** on
+`educ8e-connector-app` (`Edulynk__Sql__Server`/`AdminApiUrl`/`PermissionsApiUrl`/`AdminApiScope` +
+`AzureAd__ClientSecret` KV-ref) and on `admin-api-asdk-test-x16w`
+(`ProductProvisioning__BaseUrl`/`__Scope` + `AdminApi__AzureB2C__ClientSecret` KV-ref — note admin-api's
+auth section is `AdminApi:AzureB2C`, and it reads KV via its UAMI `10e0aae7…`). **Still to do (ADO
+portal):** set pipeline vars `azureSubscription` (ARM service connection) + `webAppName` =
+`educ8e-connector-app`. **Gap:** `Edulynk:PermissionsApiKey` empty → permission resolution fail-closed;
+wire the platform permissions-api key (KV `RestApiKey`) as an app setting.
 
 **App registration (decided):** the existing API reg `6a3e6083…` is **reused**, flipped to multitenant
 (Phase 4.2) — audience unchanged (`api://6a3e6083…`), so the API needs only the `signInAudience` change
