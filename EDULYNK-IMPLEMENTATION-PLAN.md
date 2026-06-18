@@ -534,12 +534,15 @@ reused** (4.2). Confirm nothing else still depends on the old FE reg before dele
 
 ## Phase 5 — Infra & deploy
 
-### 5.1 Per-tenant SQL
-- One Azure SQL **logical server** (shared) + the Edulynk API's **managed identity** set as the
-  server's **Microsoft Entra admin** (or granted `dbmanager`/`loginmanager`) so it can CREATE DATABASE
-  and add MI users at provision time.
-- Databases created at runtime (Phase 2.6) as standalone **Basic** DBs. (Elastic pool deferred — DBs
-  migrate into a pool unchanged later if volume warrants.)
+### 5.1 Per-tenant SQL  ✅ DONE (provisioned)
+- ✅ **Dedicated** Azure SQL logical server **`sql-edulynk-saas`** (RG `Rapha-Backend`, eastus,
+  `sql-edulynk-saas.database.windows.net`) — chosen over reusing the platform server so the product MI
+  isn't admin of platform DBs. The Edulynk App Service **system-assigned MI** (`educ8e-connector-app`,
+  principalId `1de0eab3-761e-4bb1-9865-3fa0b0bff4cb`) is the server's **Entra admin** → can
+  `CREATE DATABASE` + add users at provision time. Firewall `AllowAzureServices` (0.0.0.0) added.
+  (`azureADOnlyAuthentication` flag reads null, but no SQL-login exists so password auth is unusable —
+  effectively Entra-only.) `Edulynk:Sql:Server` = `sql-edulynk-saas.database.windows.net`.
+- Databases created at runtime (Phase 2.6) as standalone **Basic** DBs. (Elastic pool deferred.)
 
 ### 5.2 Reuse the existing Edulynk API App Service + add a deploy pipeline
 The Edulynk API is **already deployed** on Azure — do **not** create a new App Service. We re-architect
@@ -556,9 +559,17 @@ to add/change on the existing app:
   pipeline (repo has known reds). **Still needs (infra/deploy):** MI enablement + KV/SQL RBAC, App
   Configuration endpoint app setting, and the var values.
 
-**Confirmed placement:** the existing App Service is **Linux** and in the **same subscription** as the
-platform — so no cross-subscription RBAC, the template default `webAppLinux` applies, and the
-per-tenant **SQL server (5.1) is co-located in that same subscription/region**.
+**Confirmed placement:** the existing App Service is **`educ8e-connector-app`** (Linux, RG
+`Rapha-Backend`, host `educ8e-connector-app.azurewebsites.net`), same subscription
+(`a353af1c-9dd6-4de9-af57-3bae4b638eee`) as the platform. SQL server (5.1) co-located, same region.
+
+**✅ Infra provisioned (MI + RBAC):** system-assigned MI enabled on `educ8e-connector-app`
+(`1de0eab3-761e-4bb1-9865-3fa0b0bff4cb`); granted **Key Vault Secrets User** on `kv-asdk-test-x16w` and
+**App Configuration Data Reader** on `appconfig-asdk-test-x16w`. **Still to do (deploy config):** App
+Service **application settings** (`Edulynk__Sql__Server`, `Edulynk__AdminApiUrl`,
+`Edulynk__PermissionsApiUrl`, `Edulynk__AdminApiScope`, and `AzureAd__ClientSecret` as a KV reference to
+`edulynk-api-s2s`); set the ADO pipeline vars `azureSubscription` (ARM service connection) + `webAppName`
+= `educ8e-connector-app`.
 
 **App registration (decided):** the existing API reg `6a3e6083…` is **reused**, flipped to multitenant
 (Phase 4.2) — audience unchanged (`api://6a3e6083…`), so the API needs only the `signInAudience` change
@@ -575,12 +586,17 @@ plus a client secret for the service-to-service flow.
   `DEPLOYMENT-SWA.md`). **Still needs (deploy):** the SWA resource + its deploy token
   (`AZURE_STATIC_WEB_APPS_API_TOKEN`) and the SWA app settings populated.
 
-### 5.4 Config & secrets
-- App Configuration: `Edulynk:Sql:Server`, `Edulynk:AdminApiUrl`, `Edulynk:PermissionsApiUrl`, the
-  edulynk-api client id, label `ver0.8.0`.
-- Key Vault: Service Bus connection, the saas-app/edulynk-api client secrets, any Power BI SP secret.
+### 5.4 Config & secrets  🟡 secrets DONE; config keys pending
+- ✅ **Key Vault** (`kv-asdk-test-x16w`, RBAC mode): the two s2s client secrets minted **into KV** —
+  `edulynk-api-s2s` (Edulynk API reg `6a3e6083`, for its client-credentials calls) and `admin-api-s2s`
+  (admin-api reg `2ddb6984`, for the platform's token acquisition to call Edulynk provision). Both 1-yr;
+  **add to Phase 7 rotation.** Still to add if used: Service Bus connection, Power BI SP secret.
+- **App Configuration** (`appconfig-asdk-test-x16w`): still to add `Edulynk:Sql:Server`,
+  `Edulynk:AdminApiUrl`, `Edulynk:PermissionsApiUrl`, the edulynk-api client id, label `ver0.8.0` —
+  **only needed if** the Edulynk API wires the App Configuration provider; otherwise the same values go
+  as App Service app settings (chosen path, see 5.2). The MI already has App Config Data Reader.
 - Admin API config: `Marketplace:TierMaxStudents`, `Marketplace:PlanToProductTier`,
-  `Edulynk:ProvisionUrl`.
+  `Edulynk:ProvisionUrl`, and `AzureAd:ClientSecret` → KV ref to `admin-api-s2s`.
 
 ---
 
