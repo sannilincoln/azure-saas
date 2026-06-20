@@ -114,11 +114,13 @@ builder.Services.AddSaasWebAppAuthentication(
     .SaaSAppCallDownstreamApi(Array.Empty<string>())
     .AddInMemoryTokenCaches();
 
-// Managing the situation where the access token is not in cache.
-// For more details please see: https://github.com/AzureAD/microsoft-identity-web/issues/13
-builder.Services.Configure<CookieAuthenticationOptions>(
-    CookieAuthenticationDefaults.AuthenticationScheme,
-    options => options.Events = new RejectSessionCookieWhenAccountNotInCacheEvents(fullyQualifiedScopes));
+// NOTE: the RejectSessionCookieWhenAccountNotInCacheEvents cookie validator was removed here on
+// purpose. It ran GetAccessTokenForUserAsync(<Admin API scopes>) on EVERY authenticated request to
+// detect a lost MSAL cache — but under the app-only onboarding model a customer never holds a
+// delegated Admin API token (they only consent to user-consentable Graph scopes), so that check
+// throws AADSTS65001 on every request (500), and rejecting/looping the cookie can't fix it because
+// re-login won't grant Admin API consent either. The only delegated Admin API consumer left is the
+// publisher console, which obtains consent at the call site (publisher tenant is already consented).
 
 builder.Services.AddHttpClient<IAdminServiceClient, AdminServiceClient>(httpClient =>
 {
