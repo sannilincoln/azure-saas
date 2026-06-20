@@ -98,14 +98,20 @@ var scopes = builder.Configuration.GetRequiredSection(AdminApiOptions.SectionNam
 // error prone, we store the names of the scopes separately from the application id uri and combine them when neded.
 var fullyQualifiedScopes = scopes.Select(scope => $"{applicationUri}/{scope}".Trim('/')).ToArray();
 
-// Adding SaaS Authentication and setting web app up for calling the Admin API
+// Adding SaaS Authentication and setting web app up for calling the Admin API.
+// IMPORTANT (multitenant marketplace): the interactive sign-in must NOT request the Admin API scopes
+// as combined consent (empty initial downstream scopes). A customer's Entra tenant would then have to
+// provision a service principal for, and consent to, the Admin API just to sign in — which fails for
+// the typical non-admin buyer (AADSTS650052). The Admin API is instead called app-only during
+// onboarding (see OnboardingAdminClient). Token acquisition stays enabled so the publisher console can
+// still acquire delegated Admin API tokens on demand (the publisher tenant has already consented).
 builder.Services.AddSaasWebAppAuthentication(
     fullyQualifiedScopes,
     options =>
     {
         builder.Configuration.Bind(EntraSignupAdminOptions.SectionName, options);
     })
-    .SaaSAppCallDownstreamApi()
+    .SaaSAppCallDownstreamApi(Array.Empty<string>())
     .AddInMemoryTokenCaches();
 
 // Managing the situation where the access token is not in cache.
@@ -127,6 +133,19 @@ builder.Services.AddHttpClient<IAdminServiceClient, AdminServiceClient>(httpClie
 
 // Typed client for the Admin API's marketplace endpoints (same Admin API base + auth).
 builder.Services.AddHttpClient<IMarketplaceAdminClient, MarketplaceAdminClient>(httpClient =>
+{
+    string adminApiBaseUrl = builder.Environment.IsDevelopment()
+        ? builder.Configuration.GetRequiredSection("adminApi:baseUrl").Value
+            ?? throw new NullReferenceException("Environment is running in development mode. Please specify the value for 'adminApi:baseUrl' in appsettings.json.")
+        : builder.Configuration.GetRequiredSection(EntraAdminApiOptions.SectionName)?.Get<EntraAdminApiOptions>()?.BaseUrl
+            ?? throw new NullReferenceException($"{nameof(EntraAdminApiOptions)} Url cannot be null");
+
+    httpClient.BaseAddress = new Uri(adminApiBaseUrl);
+});
+
+// App-only typed client for the onboarding calls into the Admin API (resolve/activate, route check,
+// tenant create). Same Admin API base; auth is app-only (Service.Access app role) — see OnboardingAdminClient.
+builder.Services.AddHttpClient<IOnboardingAdminClient, OnboardingAdminClient>(httpClient =>
 {
     string adminApiBaseUrl = builder.Environment.IsDevelopment()
         ? builder.Configuration.GetRequiredSection("adminApi:baseUrl").Value

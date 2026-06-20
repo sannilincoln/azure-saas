@@ -3,6 +3,7 @@ using Saas.Identity.Authorization.Model.Claim;
 using Saas.Identity.Authorization.Model.Data;
 using Saas.Identity.Authorization.Model.Kind;
 using Saas.Identity.Authorization.Requirement;
+using Saas.Admin.Service.Authorization;
 using Saas.Admin.Service.Fulfillment;
 using Saas.Admin.Service.Membership;
 using Saas.Permissions.Client;
@@ -117,9 +118,12 @@ public class TenantsController : ControllerBase
     /// <param name="tenantRequest"></param>
     /// <returns></returns>
     /// <remarks>
-    /// <para><b>Requires:</b> Authenticated user</para>
-    /// <para>This call needs a user to make admin of this tenant.  TBD explicitly pass in the user ID or 
-    /// make the current user the admin (would prevent a third party creating tenants on behalf of user)</para>
+    /// <para><b>Requires:</b> the <c>Service.Access</c> app role (app-only token).</para>
+    /// <para>Called service-to-service by the Sign-up/Admin web app during onboarding. The web app runs
+    /// the interactive sign-in (so customer tenants only ever consent to user-consentable Graph scopes,
+    /// never to this Admin API) and then creates the tenant app-only. The user to make tenant admin is
+    /// therefore passed explicitly in <see cref="NewTenantRequest.CreatorObjectId"/>, not read from a
+    /// user token.</para>
     /// </remarks>
     [HttpPost()]
     [Produces(MediaTypeNames.Application.Json)]
@@ -129,19 +133,19 @@ public class TenantsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
 
-    [Authorize] 
+    [Authorize(Policy = ServiceAccessPolicy.Name)]
     public async Task<ActionResult<TenantDTO>> PostTenant(NewTenantRequest tenantRequest)
     {
         try
         {
-            _logger.LogInformation("Creating a new tenant: {NewTenantName} for {OwnerID}, requested by {User}", tenantRequest.Name, tenantRequest.CreatorEmail, User?.Identity?.Name);
-            
-            if (! Guid.TryParse(User?.GetNameIdentifierId(), out var userId)) 
+            _logger.LogInformation("Creating a new tenant: {NewTenantName} for {OwnerID} (creator {CreatorObjectId})", tenantRequest.Name, tenantRequest.CreatorEmail, tenantRequest.CreatorObjectId);
+
+            if (tenantRequest.CreatorObjectId == Guid.Empty)
             {
-                throw new InvalidOperationException("The the User Name Identifier must be a Guid.");
+                return BadRequest("CreatorObjectId is required (the user to make admin of the new tenant).");
             }
-            
-            TenantDTO tenant = await _tenantService.AddTenantAsync(tenantRequest, userId);
+
+            TenantDTO tenant = await _tenantService.AddTenantAsync(tenantRequest, tenantRequest.CreatorObjectId);
 
             _logger.LogInformation("Created a new tenant {NewTenantName} with URL {NewTenantRoute}, and ID {NewTenantID}", tenant.Name, tenant.Route, tenant.Id);
             
@@ -527,7 +531,7 @@ public class TenantsController : ControllerBase
     [HttpGet("IsValidPath/{path}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
 
-    [Authorize]
+    [Authorize(Policy = ServiceAccessPolicy.Name)]
     public async Task<ActionResult<bool>> IsValidPath(string path)
     {
         _logger.LogDebug("Validating Path {path}", path);

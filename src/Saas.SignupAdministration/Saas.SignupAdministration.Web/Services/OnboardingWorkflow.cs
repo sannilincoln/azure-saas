@@ -7,8 +7,7 @@ namespace Saas.SignupAdministration.Web.Services;
 
 public class OnboardingWorkflowService
 {
-    private readonly IAdminServiceClient _adminServiceClient;
-    private readonly IMarketplaceAdminClient _marketplaceClient;
+    private readonly IOnboardingAdminClient _onboardingClient;
     private readonly IPersistenceProvider _persistenceProvider;
     private readonly IApplicationUser _applicationUser;
     private readonly IEmail _email;
@@ -24,11 +23,10 @@ public class OnboardingWorkflowService
         }
     }
 
-    public OnboardingWorkflowService(IApplicationUser applicationUser, IAdminServiceClient adminServiceClient, IMarketplaceAdminClient marketplaceClient, IPersistenceProvider persistenceProvider, IEmail email)
+    public OnboardingWorkflowService(IApplicationUser applicationUser, IOnboardingAdminClient onboardingClient, IPersistenceProvider persistenceProvider, IEmail email)
     {
         _applicationUser = applicationUser;
-        _adminServiceClient = adminServiceClient;
-        _marketplaceClient = marketplaceClient;
+        _onboardingClient = onboardingClient;
         _persistenceProvider = persistenceProvider;
         _email = email;
 
@@ -57,24 +55,25 @@ public class OnboardingWorkflowService
                 "Please restart the onboarding from the beginning.");
         }
 
-        NewTenantRequest tenantRequest = new()
-        {
-            Name = OnboardingWorkflowItem.OrganizationName,
-            Route = OnboardingWorkflowItem.TenantRouteName,
-            CreatorEmail = _applicationUser.EmailAddress,
-            ProductTierId = OnboardingWorkflowItem.ProductId,
-            CategoryId = OnboardingWorkflowItem.CategoryId
-        };
+        OnboardingTenantRequest tenantRequest = new(
+            Name: OnboardingWorkflowItem.OrganizationName,
+            Route: OnboardingWorkflowItem.TenantRouteName,
+            CreatorEmail: _applicationUser.EmailAddress,
+            // The signed-in customer becomes the admin of the new tenant. Passed explicitly because the
+            // Admin API call is app-only (no user token) — see OnboardingAdminClient.
+            CreatorObjectId: _applicationUser.NameIdentifier,
+            ProductTierId: OnboardingWorkflowItem.ProductId,
+            CategoryId: OnboardingWorkflowItem.CategoryId);
 
-        // Call new Admin API
-        TenantDTO tenant = await _adminServiceClient.TenantsPOSTAsync(tenantRequest);
+        // Call the Admin API app-only (service-to-service).
+        Guid tenantId = await _onboardingClient.CreateTenantAsync(tenantRequest);
 
         // Marketplace-originated onboarding: now that the tenant exists, activate the
         // subscription (this starts billing) and link it to the tenant. Activation happens
         // only after provisioning succeeds, so we never bill for a tenant that failed to create.
         if (OnboardingWorkflowItem.SubscriptionId is Guid subscriptionId)
         {
-            await _marketplaceClient.ActivateAsync(subscriptionId, tenant.Id);
+            await _onboardingClient.ActivateAsync(subscriptionId, tenantId);
         }
 
         OnboardingWorkflowItem.IsComplete = true;
@@ -91,6 +90,6 @@ public class OnboardingWorkflowService
 
     public async Task<bool> GetRouteExistsAsync(string route)
     {
-        return !await _adminServiceClient.IsValidPathAsync(route);
+        return !await _onboardingClient.IsValidPathAsync(route);
     }
 }

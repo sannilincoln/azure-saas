@@ -12,11 +12,11 @@ public interface IMarketplaceFulfillmentService
     /// Exchanges a marketplace token for the durable subscription, persists it
     /// (status PendingFulfillmentStart) and returns enough to seed onboarding. The token is
     /// single-use / 24h; this is called once, immediately, from the landing page.
-    /// <paramref name="customerTenantId"/> is the resolving (buying) user's home tenant — the
-    /// buyer administers their own purchase, so this becomes the subscription's customer-tenant
-    /// key for self-service filtering.
+    /// The subscription's customer-tenant key (used for runtime tenant resolution and self-service
+    /// filtering) is taken from the resolved subscription's <c>Beneficiary.TenantId</c> — the org whose
+    /// users will sign in to the product — not from the interactive caller, since this runs app-only.
     /// </summary>
-    Task<ResolvedSubscriptionDto> ResolveAsync(string marketplaceToken, Guid? customerTenantId);
+    Task<ResolvedSubscriptionDto> ResolveAsync(string marketplaceToken);
 
     /// <summary>
     /// Activates the subscription with Microsoft (starts billing) AFTER onboarding has

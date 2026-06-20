@@ -13,7 +13,7 @@ namespace Saas.SignupAdministration.Web.Controllers;
 [Authorize]
 [Route("marketplace")]
 public class MarketplaceController(
-    IMarketplaceAdminClient marketplaceClient,
+    IOnboardingAdminClient onboardingClient,
     OnboardingWorkflowService onboardingWorkflow,
     ILogger<MarketplaceController> logger) : Controller
 {
@@ -25,7 +25,7 @@ public class MarketplaceController(
             return BadRequest("Missing Azure Marketplace token.");
         }
 
-        var resolved = await marketplaceClient.ResolveAsync(token);
+        var resolved = await onboardingClient.ResolveAsync(token);
 
         onboardingWorkflow.OnboardingWorkflowItem.OrganizationName = resolved.SubscriptionName ?? string.Empty;
         onboardingWorkflow.OnboardingWorkflowItem.SubscriptionId = resolved.SubscriptionId;

@@ -20,10 +20,29 @@ public class MarketplaceFulfillmentService(
     private const string StatusPendingFulfillmentStart = "PendingFulfillmentStart";
     private const string StatusSubscribed = "Subscribed";
 
-    public async Task<ResolvedSubscriptionDto> ResolveAsync(string marketplaceToken, Guid? customerTenantId)
+    public async Task<ResolvedSubscriptionDto> ResolveAsync(string marketplaceToken)
     {
         var resolved = await fulfillmentApi.ResolveAsync(marketplaceToken)
             ?? throw new InvalidOperationException("Marketplace token could not be resolved (expired, already used, or invalid).");
+
+        // The customer-tenant key is the subscription's BENEFICIARY tenant (the org whose users sign in
+        // to the product). It is NOT on the resolve result, so fetch the full subscription. This is what
+        // runtime tenant resolution matches the inbound token 'tid' against — so it must be the real
+        // customer directory, never the interactive caller's tenant (this call is app-only anyway).
+        Guid? customerTenantId = null;
+        try
+        {
+            var full = await fulfillmentApi.GetSubscriptionByIdAsync(resolved.SubscriptionId);
+            var beneficiaryTenantId = full?.Beneficiary?.TenantId ?? Guid.Empty;
+            if (beneficiaryTenantId != Guid.Empty)
+            {
+                customerTenantId = beneficiaryTenantId;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not read beneficiary tenant for subscription {SubscriptionId}; customer-tenant key left unset.", resolved.SubscriptionId);
+        }
 
         // Persist immediately and durably — the token is single-use/24h, so we never rely on
         // the onboarding session to carry the subscription forward.
@@ -48,9 +67,9 @@ public class MarketplaceFulfillmentService(
         subscription.IsActive = true;
         subscription.ModifyDate = DateTime.UtcNow;
 
-        // The buyer administers their own purchase: record their home tenant so customer
-        // self-service can later show them only their own subscription(s). Don't overwrite a
-        // previously captured value with null on a re-resolve.
+        // Record the beneficiary (customer) tenant so runtime tenant resolution and customer
+        // self-service can key off it. Don't overwrite a previously captured value with null on a
+        // re-resolve (e.g. if the beneficiary lookup transiently failed).
         if (customerTenantId is Guid tenantId)
         {
             subscription.PurchaserTenantId = tenantId;

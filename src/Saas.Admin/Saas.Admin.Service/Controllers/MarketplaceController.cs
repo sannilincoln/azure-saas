@@ -1,16 +1,19 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Identity.Web;
+using Saas.Admin.Service.Authorization;
 using Saas.Admin.Service.Fulfillment;
 
 namespace Saas.Admin.Service.Controllers;
 
 /// <summary>
-/// Server-side Azure Marketplace fulfillment endpoints. Called by the Sign-up/Admin web app's
-/// landing page (with the signed-in user's bearer token). The actual server-to-server calls to
-/// Microsoft run here, where the publisher service-principal credentials live.
+/// Server-side Azure Marketplace fulfillment endpoints. Called service-to-service by the Sign-up/Admin
+/// web app's onboarding flow with an <b>app-only</b> token bearing the <c>Service.Access</c> app role —
+/// not the customer's user token. This keeps the customer's tenant off the Admin API consent surface
+/// (the web app runs the interactive sign-in for them, requesting only user-consentable Graph scopes),
+/// which is essential because customers are typically non-admins in their tenant. The publisher
+/// service-principal credentials used for the Microsoft-facing calls live here.
 /// </summary>
-[Authorize]
+[Authorize(Policy = ServiceAccessPolicy.Name)]
 [ApiController]
 [Route("api/[controller]")]
 public class MarketplaceController(IMarketplaceFulfillmentService fulfillment) : ControllerBase
@@ -24,11 +27,10 @@ public class MarketplaceController(IMarketplaceFulfillmentService fulfillment) :
             return BadRequest("Marketplace token is required.");
         }
 
-        // The signed-in caller is the buyer; their home tenant becomes the subscription's
-        // customer-tenant key (used by customer self-service filtering).
-        Guid? customerTenantId = Guid.TryParse(User.GetTenantId(), out var tid) ? tid : null;
-
-        var resolved = await fulfillment.ResolveAsync(request.Token, customerTenantId);
+        // The buyer's tenant (the subscription's customer-tenant key, used for runtime tenant
+        // resolution + self-service filtering) is taken from the resolved subscription's beneficiary,
+        // not from an interactive sign-in — this call is app-only.
+        var resolved = await fulfillment.ResolveAsync(request.Token);
         return Ok(resolved);
     }
 

@@ -23,7 +23,7 @@ public class MarketplaceFulfillmentServiceTests
             provisioning ?? Substitute.For<IProductProvisioningService>(),
             Options.Create(options), NullLogger<MarketplaceFulfillmentService>.Instance);
 
-    private static IFulfillmentApiService FulfillmentResolving(string planId) =>
+    private static IFulfillmentApiService FulfillmentResolving(string planId, Guid? beneficiaryTenantId = null) =>
         ResolvingWith(new ResolvedSubscriptionResult
         {
             SubscriptionId = Guid.NewGuid(),
@@ -31,12 +31,17 @@ public class MarketplaceFulfillmentServiceTests
             OfferId = "offer-1",
             PlanId = planId,
             Quantity = 5,
-        });
+        }, beneficiaryTenantId);
 
-    private static IFulfillmentApiService ResolvingWith(ResolvedSubscriptionResult result)
+    private static IFulfillmentApiService ResolvingWith(ResolvedSubscriptionResult result, Guid? beneficiaryTenantId = null)
     {
         var fulfillment = Substitute.For<IFulfillmentApiService>();
         fulfillment.ResolveAsync(Arg.Any<string>()).Returns(result);
+        // The service reads the customer-tenant key from the full subscription's beneficiary.
+        fulfillment.GetSubscriptionByIdAsync(Arg.Any<Guid>()).Returns(new SubscriptionResult
+        {
+            Beneficiary = new BeneficiaryResult { TenantId = beneficiaryTenantId ?? Guid.NewGuid() },
+        });
         return fulfillment;
     }
 
@@ -52,7 +57,7 @@ public class MarketplaceFulfillmentServiceTests
 
         var service = Build(FulfillmentResolving("premium"), options, marketplace, tenants);
 
-        var dto = await service.ResolveAsync("token", customerTenantId: Guid.NewGuid());
+        var dto = await service.ResolveAsync("token");
 
         Assert.Equal(3, dto.ProductTierId);
     }
@@ -69,7 +74,7 @@ public class MarketplaceFulfillmentServiceTests
 
         var service = Build(FulfillmentResolving("not-in-map"), options, marketplace, tenants);
 
-        var dto = await service.ResolveAsync("token", customerTenantId: Guid.NewGuid());
+        var dto = await service.ResolveAsync("token");
 
         Assert.Equal(0, dto.ProductTierId);
     }
@@ -83,7 +88,7 @@ public class MarketplaceFulfillmentServiceTests
 
         var service = Build(FulfillmentResolving("premium"), options, marketplace, tenants);
 
-        var dto = await service.ResolveAsync("token", customerTenantId: Guid.NewGuid());
+        var dto = await service.ResolveAsync("token");
 
         Assert.Equal(0, dto.ProductTierId);
     }
@@ -95,9 +100,9 @@ public class MarketplaceFulfillmentServiceTests
         using var tenants = MarketplaceTestHelpers.NewTenantsDb();
         var customerTenant = Guid.NewGuid();
 
-        var service = Build(FulfillmentResolving("premium"), new MarketplaceOptions(), marketplace, tenants);
+        var service = Build(FulfillmentResolving("premium", beneficiaryTenantId: customerTenant), new MarketplaceOptions(), marketplace, tenants);
 
-        var dto = await service.ResolveAsync("token", customerTenant);
+        var dto = await service.ResolveAsync("token");
 
         var persisted = Assert.Single(marketplace.Subscriptions);
         Assert.Equal(customerTenant, persisted.PurchaserTenantId);

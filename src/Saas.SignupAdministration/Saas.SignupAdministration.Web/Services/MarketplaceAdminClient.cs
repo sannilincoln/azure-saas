@@ -9,9 +9,6 @@ namespace Saas.SignupAdministration.Web.Services;
 
 public interface IMarketplaceAdminClient
 {
-    Task<ResolvedSubscription> ResolveAsync(string token);
-    Task ActivateAsync(Guid subscriptionId, Guid tenantId);
-
     /// <summary>All subscriptions — backs the publisher console (Admin API enforces publisher-only).</summary>
     Task<IReadOnlyList<SubscriptionInfo>> GetAllSubscriptionsAsync();
 
@@ -64,31 +61,6 @@ public class MarketplaceAdminClient(
     ITokenAcquisition tokenAcquisition,
     IOptions<SaasAppScopeOptions> scopes) : OAuthBaseClient(tokenAcquisition, scopes), IMarketplaceAdminClient
 {
-    public async Task<ResolvedSubscription> ResolveAsync(string token)
-    {
-        using var request = await CreateHttpRequestMessageAsync(CancellationToken.None);
-        request.Method = HttpMethod.Post;
-        request.RequestUri = new Uri("api/marketplace/resolve", UriKind.Relative);
-        request.Content = JsonContent.Create(new { token });
-
-        using var response = await httpClient.SendAsync(request);
-        response.EnsureSuccessStatusCode();
-
-        return await response.Content.ReadFromJsonAsync<ResolvedSubscription>()
-            ?? throw new InvalidOperationException("Admin API returned an empty resolve response.");
-    }
-
-    public async Task ActivateAsync(Guid subscriptionId, Guid tenantId)
-    {
-        using var request = await CreateHttpRequestMessageAsync(CancellationToken.None);
-        request.Method = HttpMethod.Post;
-        request.RequestUri = new Uri($"api/marketplace/{subscriptionId}/activate", UriKind.Relative);
-        request.Content = JsonContent.Create(new { tenantId });
-
-        using var response = await httpClient.SendAsync(request);
-        response.EnsureSuccessStatusCode();
-    }
-
     public Task<IReadOnlyList<SubscriptionInfo>> GetAllSubscriptionsAsync() =>
         GetListAsync("api/marketplace/subscriptions");
 
