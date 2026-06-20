@@ -86,6 +86,10 @@ public static class MarketplaceServiceCollectionExtensions
         services.AddSingleton<ValidateJwtToken>();
         services.AddScoped<IWebhookHandler, MarketplaceWebhookHandler>();
 
+        // Background worker that performs the slow provisioning + Microsoft activation out of band, so
+        // onboarding returns immediately instead of blocking on CREATE DATABASE (which timed out → 502).
+        services.AddHostedService<TenantProvisioningWorker>();
+
         return services;
     }
 }

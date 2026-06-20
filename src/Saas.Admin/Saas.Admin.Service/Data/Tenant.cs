@@ -33,6 +33,14 @@ public class Tenant
     /// </summary>
     public string? DatabaseName { get; set; }
 
+    /// <summary>
+    /// Background provisioning lifecycle: <c>Provisioning</c> (queued/in progress), <c>Provisioned</c>
+    /// (database ready — see <see cref="DatabaseName"/>), or <c>Failed</c>. Set when a marketplace
+    /// subscription is linked; the background worker advances it. Null for tenants that never went
+    /// through marketplace provisioning. See <see cref="Fulfillment.ProvisioningStatuses"/>.
+    /// </summary>
+    public string? ProvisioningStatus { get; set; }
+
     [Timestamp]
     public byte[]? ConcurrencyToken { get; set; }
 }

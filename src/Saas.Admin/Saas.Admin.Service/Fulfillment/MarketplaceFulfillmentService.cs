@@ -95,58 +95,127 @@ public class MarketplaceFulfillmentService(
 
     public async Task ActivateAsync(Guid subscriptionId, Guid tenantId)
     {
-        var subscription = await marketplaceDb.Subscriptions
+        // Resolve must have run first; the subscription row is the durable source of truth.
+        _ = await marketplaceDb.Subscriptions
             .FirstOrDefaultAsync(s => s.AmpsubscriptionId == subscriptionId)
             ?? throw new InvalidOperationException($"Subscription {subscriptionId} not found; resolve must run before activate.");
 
-        // Activate with Microsoft — this starts billing, so it must happen only after
-        // onboarding has succeeded (otherwise we'd charge for a tenant that never provisioned).
-        await fulfillmentApi.ActivateSubscriptionAsync(subscriptionId, subscription.AmpplanId);
-
-        subscription.SubscriptionStatus = StatusSubscribed;
-        subscription.ModifyDate = DateTime.UtcNow;
-        await marketplaceDb.SaveChangesAsync();
-
         var tenant = await tenantsDb.Tenants.FindAsync(tenantId)
             ?? throw new InvalidOperationException($"Tenant {tenantId} not found when linking subscription {subscriptionId}.");
+
+        // Link the subscription and queue provisioning for the background worker. The slow work
+        // (Microsoft activation, CREATE DATABASE + migrate + seed) runs out of band so the onboarding
+        // HTTP request returns immediately instead of blocking ~60s and timing out (502). DatabaseName
+        // stays null until provisioning succeeds, so tenant resolution fails closed (graceful 403) until
+        // the tenant is actually ready to serve traffic.
         tenant.SubscriptionId = subscriptionId;
-        tenant.SubscriptionStatus = StatusSubscribed;
-
-        // Choose the tenant's dedicated database name (product-agnostic: the prefix is config, not a
-        // literal). When no prefix is configured, this product doesn't use a database-per-tenant model
-        // and provisioning is skipped entirely.
-        var databaseNamePrefix = marketplaceOptions.Value.TenantDatabaseNamePrefix;
-        string? databaseName = null;
-        if (!string.IsNullOrWhiteSpace(databaseNamePrefix))
-        {
-            databaseName = $"{databaseNamePrefix}-{tenant.Route}";
-            tenant.DatabaseName = databaseName;
-        }
-
+        tenant.SubscriptionStatus = StatusPendingFulfillmentStart;
+        tenant.ProvisioningStatus = ProvisioningStatuses.Provisioning;
         await tenantsDb.SaveChangesAsync();
 
-        logger.LogInformation("Activated marketplace subscription {SubscriptionId} and linked it to tenant {TenantId}.",
+        logger.LogInformation("Linked subscription {SubscriptionId} to tenant {TenantId}; queued for background activation + provisioning.",
             subscriptionId, tenantId);
+    }
 
-        // Provision the product side (per-tenant database). Synchronous and idempotent: the database
-        // must exist before the customer uses the product. Unlike the publisher email below, a
-        // provisioning failure is NOT swallowed — it propagates so onboarding can surface/retry it.
-        if (databaseName is not null)
+    public async Task ProcessPendingProvisioningAsync(CancellationToken cancellationToken = default)
+    {
+        var pending = await tenantsDb.Tenants
+            .Where(t => t.ProvisioningStatus == ProvisioningStatuses.Provisioning)
+            .OrderBy(t => t.CreatedTime)
+            .Take(10)
+            .ToListAsync(cancellationToken);
+
+        foreach (var tenant in pending)
         {
-            await provisioning.ProvisionAsync(tenantId, databaseName);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+
+            await ProvisionAndActivateAsync(tenant, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Performs the deferred, slow part of onboarding for a single queued tenant: provision the
+    /// per-tenant database, then activate the subscription with Microsoft (billing starts only after
+    /// provisioning succeeds), then mark the tenant ready. Idempotent: <c>ProvisionAsync</c> is
+    /// CREATE-IF-NOT-EXISTS + EF migrate (re-runnable), and a re-resolve/re-activate is harmless.
+    /// </summary>
+    private async Task ProvisionAndActivateAsync(Tenant tenant, CancellationToken cancellationToken)
+    {
+        if (tenant.SubscriptionId is not Guid subscriptionId)
+        {
+            logger.LogWarning("Tenant {TenantId} is marked Provisioning but has no linked subscription; marking Failed.", tenant.Id);
+            tenant.ProvisioningStatus = ProvisioningStatuses.Failed;
+            await tenantsDb.SaveChangesAsync(cancellationToken);
+            return;
         }
 
-        // Best-effort: tell the publisher a tenant just signed up. This never throws (the activation
-        // itself is already committed; an email hiccup must not fail the customer's onboarding).
-        await notifications.NotifySubscriptionActivatedAsync(new SubscriptionActivatedNotice(
-            SubscriptionId: subscriptionId,
-            SubscriptionName: subscription.Name,
-            OfferId: subscription.AmpOfferId,
-            PlanId: subscription.AmpplanId,
-            Quantity: subscription.Ampquantity,
-            TenantName: tenant.Name,
-            TenantRoute: tenant.Route,
-            CustomerEmail: tenant.CreatorEmail));
+        try
+        {
+            var subscription = await marketplaceDb.Subscriptions
+                .FirstOrDefaultAsync(s => s.AmpsubscriptionId == subscriptionId, cancellationToken)
+                ?? throw new InvalidOperationException($"Subscription {subscriptionId} not found for tenant {tenant.Id}.");
+
+            // 1) Provision the per-tenant database (product-agnostic: prefix is config, not a literal).
+            //    When no prefix is configured this product doesn't use database-per-tenant, so skip it.
+            var databaseNamePrefix = marketplaceOptions.Value.TenantDatabaseNamePrefix;
+            string? databaseName = null;
+            if (!string.IsNullOrWhiteSpace(databaseNamePrefix))
+            {
+                databaseName = $"{databaseNamePrefix}-{tenant.Route}";
+                await provisioning.ProvisionAsync(tenant.Id, databaseName);
+            }
+
+            // 2) Activate with Microsoft (starts billing) only AFTER provisioning succeeded, so we never
+            //    charge for a tenant whose database failed to come up.
+            await fulfillmentApi.ActivateSubscriptionAsync(subscriptionId, subscription.AmpplanId);
+            subscription.SubscriptionStatus = StatusSubscribed;
+            subscription.ModifyDate = DateTime.UtcNow;
+            await marketplaceDb.SaveChangesAsync(cancellationToken);
+
+            // 3) Mark the tenant ready. Setting DatabaseName is the signal that runtime resolution may
+            //    now serve this tenant.
+            tenant.DatabaseName = databaseName;
+            tenant.SubscriptionStatus = StatusSubscribed;
+            tenant.ProvisioningStatus = ProvisioningStatuses.Provisioned;
+            await tenantsDb.SaveChangesAsync(cancellationToken);
+
+            logger.LogInformation("Provisioned + activated tenant {TenantId} (subscription {SubscriptionId}, db {DatabaseName}).",
+                tenant.Id, subscriptionId, databaseName);
+
+            // 4) Best-effort publisher notification — must never fail the (already committed) onboarding.
+            try
+            {
+                await notifications.NotifySubscriptionActivatedAsync(new SubscriptionActivatedNotice(
+                    SubscriptionId: subscriptionId,
+                    SubscriptionName: subscription.Name,
+                    OfferId: subscription.AmpOfferId,
+                    PlanId: subscription.AmpplanId,
+                    Quantity: subscription.Ampquantity,
+                    TenantName: tenant.Name,
+                    TenantRoute: tenant.Route,
+                    CustomerEmail: tenant.CreatorEmail));
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Publisher notification failed for tenant {TenantId} (non-fatal).", tenant.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Provisioning/activation failed for tenant {TenantId}; marking Failed.", tenant.Id);
+            tenant.ProvisioningStatus = ProvisioningStatuses.Failed;
+            try
+            {
+                await tenantsDb.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception saveEx)
+            {
+                logger.LogError(saveEx, "Could not persist Failed provisioning status for tenant {TenantId}.", tenant.Id);
+            }
+        }
     }
 
     /// <summary>

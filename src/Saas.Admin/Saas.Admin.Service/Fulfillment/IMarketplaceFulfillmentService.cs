@@ -19,8 +19,19 @@ public interface IMarketplaceFulfillmentService
     Task<ResolvedSubscriptionDto> ResolveAsync(string marketplaceToken);
 
     /// <summary>
-    /// Activates the subscription with Microsoft (starts billing) AFTER onboarding has
-    /// succeeded, flips the stored status to Subscribed, and links it to the created tenant.
+    /// Links the subscription to the created tenant and queues it for provisioning (marks the tenant
+    /// <c>Provisioning</c>). Returns immediately — the slow work (CREATE DATABASE + migrate + seed, then
+    /// Microsoft activation) runs out of band in <see cref="ProcessPendingProvisioningAsync"/> so the
+    /// onboarding request doesn't block ~60s and time out. The tenant's <c>DatabaseName</c> stays null
+    /// until provisioning succeeds, so it cannot serve traffic prematurely.
     /// </summary>
     Task ActivateAsync(Guid subscriptionId, Guid tenantId);
+
+    /// <summary>
+    /// Drains tenants currently in the <c>Provisioning</c> state: provisions the per-tenant database,
+    /// activates the subscription with Microsoft (billing starts only after provisioning succeeds),
+    /// sets <c>DatabaseName</c>, and marks them <c>Provisioned</c> (or <c>Failed</c>). Driven by the
+    /// background <c>TenantProvisioningWorker</c>; idempotent and safe to re-run.
+    /// </summary>
+    Task ProcessPendingProvisioningAsync(CancellationToken cancellationToken = default);
 }

@@ -58,6 +58,10 @@ namespace Saas.Admin.Service.Migrations
                     b.Property<int>("ProductTierId")
                         .HasColumnType("int");
 
+                    b.Property<string>("ProvisioningStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("Route")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
