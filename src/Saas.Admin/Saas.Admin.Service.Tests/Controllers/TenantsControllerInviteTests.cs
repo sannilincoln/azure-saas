@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -10,6 +11,7 @@ using Saas.Admin.Service.Controllers;
 using Saas.Admin.Service.Fulfillment;
 using Saas.Admin.Service.Membership;
 using Saas.Admin.Service.Services;
+using Saas.Identity.Authorization.Model.Kind;
 using Saas.Permissions.Client;
 using Xunit;
 
@@ -17,18 +19,23 @@ namespace Saas.Admin.Service.Tests.Controllers;
 
 public class TenantsControllerInviteTests
 {
-    [Fact]
-    public async Task Invite_CreatesPendingInvitation_AndDoesNotUseGraphEmailLookup()
-    {
-        var membership = Substitute.For<ITenantMembershipClient>();
-        var permissions = Substitute.For<IPermissionsServiceClient>();
-        var controller = new TenantsController(
+    private static TenantsController BuildController(
+        ITenantMembershipClient membership,
+        IPermissionsServiceClient permissions) =>
+        new(
             Substitute.For<ITenantService>(),
             permissions,
             Substitute.For<IMarketplaceSeatService>(),
             membership,
             Substitute.For<IHttpContextAccessor>(),
             NullLogger<TenantsController>.Instance);
+
+    [Fact]
+    public async Task Invite_CreatesPendingInvitation_AndDoesNotUseGraphEmailLookup()
+    {
+        var membership = Substitute.For<ITenantMembershipClient>();
+        var permissions = Substitute.For<IPermissionsServiceClient>();
+        var controller = BuildController(membership, permissions);
 
         var tenantId = Guid.NewGuid();
 
@@ -40,6 +47,90 @@ public class TenantsControllerInviteTests
         // The Graph-based email lookup must no longer be used under Workforce multitenant.
         await permissions.DidNotReceive().AddUserPermissionsToTenantByEmailAsync(
             Arg.Any<Guid?>(), Arg.Any<string>(), Arg.Any<IEnumerable<string>>());
+    }
+
+    [Fact]
+    public async Task Invite_WithRole_GrantsThatRolesPermissionStrings()
+    {
+        var membership = Substitute.For<ITenantMembershipClient>();
+        var controller = BuildController(membership, Substitute.For<IPermissionsServiceClient>());
+        var tenantId = Guid.NewGuid();
+
+        var result = await controller.InviteUserToTenant(tenantId, "bursar@school.edu", TenantRole.Bursar);
+
+        Assert.IsType<NoContentResult>(result);
+        await membership.Received(1).CreateInvitationAsync(
+            tenantId,
+            "bursar@school.edu",
+            Arg.Is<IEnumerable<string>>(p => p.SequenceEqual(TenantRole.ToPermissionStrings(TenantRole.Bursar))));
+    }
+
+    [Fact]
+    public async Task Invite_WithoutRole_DefaultsToAdmin_ForBackCompat()
+    {
+        var membership = Substitute.For<ITenantMembershipClient>();
+        var controller = BuildController(membership, Substitute.For<IPermissionsServiceClient>());
+        var tenantId = Guid.NewGuid();
+
+        await controller.InviteUserToTenant(tenantId, "owner@school.edu");
+
+        await membership.Received(1).CreateInvitationAsync(
+            tenantId,
+            "owner@school.edu",
+            Arg.Is<IEnumerable<string>>(p => p.SequenceEqual(TenantRole.ToPermissionStrings(TenantRole.Admin))));
+    }
+
+    [Fact]
+    public async Task Invite_WithUnknownRole_ReturnsBadRequest_AndCreatesNothing()
+    {
+        var membership = Substitute.For<ITenantMembershipClient>();
+        var controller = BuildController(membership, Substitute.For<IPermissionsServiceClient>());
+
+        var result = await controller.InviteUserToTenant(Guid.NewGuid(), "x@school.edu", "Wizard");
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        await membership.DidNotReceive().CreateInvitationAsync(
+            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<IEnumerable<string>>());
+    }
+
+    [Fact]
+    public async Task AssignTenantRole_AddsRolesPermissionStrings_ToExistingUser()
+    {
+        var permissions = Substitute.For<IPermissionsServiceClient>();
+        var controller = BuildController(Substitute.For<ITenantMembershipClient>(), permissions);
+        var tenantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        var result = await controller.AssignTenantRole(tenantId, userId, TenantRole.BillingAccountant);
+
+        Assert.IsType<NoContentResult>(result);
+        await permissions.Received(1).AddUserPermissionsToTenantAsync(
+            tenantId,
+            userId,
+            Arg.Is<IEnumerable<string>>(p => p.SequenceEqual(TenantRole.ToPermissionStrings(TenantRole.BillingAccountant))));
+    }
+
+    [Fact]
+    public async Task AssignTenantRole_UnknownRole_ReturnsBadRequest_AndGrantsNothing()
+    {
+        var permissions = Substitute.For<IPermissionsServiceClient>();
+        var controller = BuildController(Substitute.For<ITenantMembershipClient>(), permissions);
+
+        var result = await controller.AssignTenantRole(Guid.NewGuid(), Guid.NewGuid(), "Wizard");
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        await permissions.DidNotReceive().AddUserPermissionsToTenantAsync(
+            Arg.Any<Guid?>(), Arg.Any<Guid?>(), Arg.Any<IEnumerable<string>>());
+    }
+
+    [Fact]
+    public void GetAssignableRoles_ReturnsTheTenantRoleVocabulary()
+    {
+        var controller = BuildController(
+            Substitute.For<ITenantMembershipClient>(), Substitute.For<IPermissionsServiceClient>());
+
+        var ok = Assert.IsType<OkObjectResult>(controller.GetAssignableRoles().Result);
+        Assert.Equal(TenantRole.All, ok.Value);
     }
 
     [Fact]

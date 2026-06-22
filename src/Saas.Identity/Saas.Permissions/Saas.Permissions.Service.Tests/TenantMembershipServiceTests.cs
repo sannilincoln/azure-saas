@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Saas.Identity.Authorization.Model.Data;
+using Saas.Identity.Authorization.Model.Kind;
 using Saas.Permissions.Service.Data.Context;
 using Saas.Permissions.Service.Interfaces;
 using Saas.Permissions.Service.Services;
@@ -124,5 +125,53 @@ public class TenantMembershipServiceTests
         var member = db.TenantMembers.Single(m => m.TenantId == tenantId && m.UserId == userId);
         Assert.Equal(tenantId, member.TenantId);
         Assert.Equal(userId, member.UserId);
+    }
+
+    [Fact]
+    public async Task GetMembers_ReturnsEachMemberWithTheirRoleTags()
+    {
+        using var db = NewDb();
+        var tenantId = Guid.NewGuid();
+        var creatorId = Guid.NewGuid();
+        var bursarId = Guid.NewGuid();
+
+        var permissionsSvc = new PermissionsService(db, NullLogger<PermissionsService>.Instance, Substitute.For<IGraphAPIService>());
+        await permissionsSvc.AddNewTenantAsync(tenantId, creatorId); // creator -> Super-Admin
+
+        var membership = Build(db);
+        await membership.CreateInvitationAsync(tenantId, "bursar@school.edu", TenantRoleStrings(TenantRole.Bursar));
+        await membership.BindMemberAsync(tenantId, bursarId, "bursar@school.edu", "Jane Bursar");
+
+        var members = await membership.GetMembersAsync(tenantId);
+
+        var creator = members.Single(m => m.UserId == creatorId);
+        Assert.Contains(TenantRole.SuperAdmin, creator.Roles);
+
+        var bursar = members.Single(m => m.UserId == bursarId);
+        Assert.Equal("bursar@school.edu", bursar.Email);
+        Assert.Equal("Jane Bursar", bursar.DisplayName);
+        Assert.Equal(new[] { TenantRole.Bursar }, bursar.Roles);
+    }
+
+    private static string[] TenantRoleStrings(string role) => TenantRole.ToPermissionStrings(role);
+
+    [Fact]
+    public async Task AddNewTenant_BootstrapsTheCreatorAsSuperAdmin()
+    {
+        using var db = NewDb();
+        var tenantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var svc = new PermissionsService(db, NullLogger<PermissionsService>.Instance, Substitute.For<IGraphAPIService>());
+
+        await svc.AddNewTenantAsync(tenantId, userId);
+
+        var grant = db.SaasPermissions
+            .Include(p => p.TenantPermissions)
+            .Single(p => p.TenantId == tenantId && p.UserId == userId);
+        var tenantPerms = grant.TenantPermissions.Select(p => p.PermissionStr).ToArray();
+
+        // Creator gets the CRUD Admin permission (API authorization) AND the Super-Admin role tag (UI).
+        Assert.Equal(TenantRole.ToPermissionStrings(TenantRole.SuperAdmin), tenantPerms);
+        Assert.Contains("Role:Super-Admin", tenantPerms);
     }
 }

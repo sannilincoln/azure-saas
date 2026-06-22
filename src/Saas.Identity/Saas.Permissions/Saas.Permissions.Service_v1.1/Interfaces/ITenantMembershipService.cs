@@ -1,3 +1,5 @@
+using Saas.Permissions.Service.Models;
+
 namespace Saas.Permissions.Service.Interfaces;
 
 /// <summary>
@@ -15,6 +17,12 @@ public interface ITenantMembershipService
     /// permission grants for the user's object id, recording their identity. Idempotent.
     /// </summary>
     Task<TenantBindResult> BindMemberAsync(Guid tenantId, Guid userId, string email, string? displayName);
+
+    /// <summary>
+    /// Lists the tenant's confirmed members with the roles each holds (derived from their <c>Role:</c>
+    /// permission tags). Drives the product's team-management screen.
+    /// </summary>
+    Task<IReadOnlyList<TenantMemberDto>> GetMembersAsync(Guid tenantId);
 }
 
 /// <summary>Outcome of a bind attempt.</summary>

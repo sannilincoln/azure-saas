@@ -429,9 +429,18 @@ public class TenantsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
 
-    [SaasAuthorize<SaasTenantPermissionRequirement, TenantPermissionKind>(TenantPermissionKind.Admin, "tenantId")]
-    public async Task<IActionResult> InviteUserToTenant(Guid tenantId, string userEmail)
+    [Authorize(Policy = TenantAdminOrServicePolicy.Name)]
+    public async Task<IActionResult> InviteUserToTenant(Guid tenantId, string userEmail, string? role = null)
     {
+        // A Super-Admin invites users with a specific tenant role (Bursar, Billing-Accountant, ...).
+        // When no role is supplied we preserve the previous behavior (invitee becomes a tenant Admin)
+        // so older callers keep working; the FE always passes an explicit role.
+        role ??= TenantRole.Admin;
+        if (!TenantRole.IsKnown(role))
+        {
+            return BadRequest($"Unknown tenant role '{role}'.");
+        }
+
         try
         {
             // Enforce the purchased seat count before adding a user (no-op for non-marketplace tenants).
@@ -445,15 +454,51 @@ public class TenantsController : ControllerBase
 
         // Record a pending invitation by email. Under Workforce multitenant the invitee lives in the
         // customer's own directory and cannot be resolved via the publisher's Graph, so we do NOT look
-        // them up here — they are bound to their real object id on first sign-in (JIT). The granted
-        // permissions are preserved from the previous behavior (Admin); a per-role invite is Phase 2.5.
+        // them up here — they are bound to their real object id on first sign-in (JIT). The role expands
+        // to its backing CRUD permission + Role: tag, both granted on bind.
         await _membershipClient.CreateInvitationAsync(
             tenantId,
             userEmail,
-            new string[] { TenantPermissionKind.Admin.ToString() });
+            TenantRole.ToPermissionStrings(role));
 
         return NoContent();
     }
+
+    /// <summary>
+    /// Assign a tenant role to an existing member (already bound to the tenant).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Requires:</b> {tenantID}.tenant.admin — a Super-Admin (or Admin) manages roles.</para>
+    /// <para>The role expands to its backing CRUD permission + <c>Role:</c> tag, both added for the user
+    /// on this tenant. Roles are additive; use the permissions delete endpoint to remove a grant.</para>
+    /// </remarks>
+    [HttpPost("{tenantId}/Users/{userId}/role")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+
+    [Authorize(Policy = TenantAdminOrServicePolicy.Name)]
+    public async Task<IActionResult> AssignTenantRole(Guid tenantId, Guid userId, [FromQuery] string role)
+    {
+        if (!TenantRole.IsKnown(role))
+        {
+            return BadRequest($"Unknown tenant role '{role}'.");
+        }
+
+        await _permissionsServiceClient.AddUserPermissionsToTenantAsync(
+            tenantId, userId, TenantRole.ToPermissionStrings(role));
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// List the tenant roles a Super-Admin may assign (drives the invite / assign-role UI).
+    /// </summary>
+    [HttpGet("roles")]
+    [Produces("application/json")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public ActionResult<IEnumerable<string>> GetAssignableRoles() => Ok(TenantRole.All);
 
     /// <summary>
     /// Bind the signed-in user to a pending invitation on first sign-in (JIT membership).

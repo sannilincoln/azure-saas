@@ -89,6 +89,10 @@ builder.Services.AddSingleton<IAuthorizationHandler, SaasUserPermissionAuthoriza
 // Service-to-service: accept the product API's app-only token bearing the Service.Access app role
 // (Phase 4.3) on the s2s endpoints (tenant resolution, quota).
 builder.Services.AddSingleton<IAuthorizationHandler, Saas.Admin.Service.Authorization.ServiceAppRoleAuthorizationHandler>();
+
+// Tenant member-management (invite / assign role): a tenant admin on a user token OR the product BFF
+// on an app-only Service.Access token (Option B — customer tenants never consent to the Admin API).
+builder.Services.AddSingleton<IAuthorizationHandler, Saas.Admin.Service.Authorization.TenantAdminOrServiceAuthorizationHandler>();
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy(Saas.Admin.Service.Authorization.ServiceAccessPolicy.Name, policy =>
@@ -96,6 +100,12 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser();
         policy.AddRequirements(new Saas.Admin.Service.Authorization.ServiceAppRoleRequirement(
             Saas.Admin.Service.Authorization.ServiceAccessPolicy.RoleValue));
+    });
+
+    options.AddPolicy(Saas.Admin.Service.Authorization.TenantAdminOrServicePolicy.Name, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new Saas.Admin.Service.Authorization.TenantAdminOrServiceRequirement());
     });
 });
 

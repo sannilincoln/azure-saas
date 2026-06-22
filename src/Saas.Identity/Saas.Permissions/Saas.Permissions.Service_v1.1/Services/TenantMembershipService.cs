@@ -1,6 +1,8 @@
 using Saas.Identity.Authorization.Model.Data;
+using Saas.Identity.Authorization.Model.Kind;
 using Saas.Permissions.Service.Data.Context;
 using Saas.Permissions.Service.Interfaces;
+using Saas.Permissions.Service.Models;
 
 namespace Saas.Permissions.Service.Services;
 
@@ -87,6 +89,40 @@ public class TenantMembershipService(
 
         await permissionsContext.SaveChangesAsync();
         return TenantBindResult.Bound;
+    }
+
+    public async Task<IReadOnlyList<TenantMemberDto>> GetMembersAsync(Guid tenantId)
+    {
+        var members = await permissionsContext.TenantMembers
+            .Where(m => m.TenantId == tenantId)
+            .ToListAsync();
+
+        // Role tags live on the members' tenant permissions; pull them once and index by user.
+        var grants = await permissionsContext.SaasPermissions
+            .Include(p => p.TenantPermissions)
+            .Where(p => p.TenantId == tenantId)
+            .ToListAsync();
+
+        var rolesByUser = grants
+            .GroupBy(p => p.UserId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.SelectMany(p => p.TenantPermissions)
+                      .Select(tp => TenantRole.FromClaimTag(tp.PermissionStr))
+                      .Where(role => role is not null)
+                      .Select(role => role!)
+                      .Distinct()
+                      .ToArray());
+
+        return members
+            .Select(m => new TenantMemberDto
+            {
+                UserId = m.UserId,
+                Email = m.Email,
+                DisplayName = m.DisplayName,
+                Roles = rolesByUser.TryGetValue(m.UserId, out var roles) ? roles : [],
+            })
+            .ToList();
     }
 
     private static string Normalize(string email) => email.Trim().ToLowerInvariant();

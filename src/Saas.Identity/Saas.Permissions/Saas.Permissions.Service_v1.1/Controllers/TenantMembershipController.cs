@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Saas.Permissions.Service.Interfaces;
+using Saas.Permissions.Service.Models;
 
 namespace Saas.Permissions.Service.Controllers;
 
@@ -34,5 +35,15 @@ public class TenantMembershipController(ITenantMembershipService membership) : C
     {
         var result = await membership.BindMemberAsync(tenantId, userId, email, displayName);
         return Ok(result.ToString());
+    }
+
+    /// <summary>Lists the tenant's members with the roles each holds (drives the team-management screen).</summary>
+    [HttpGet]
+    [Route("GetMembers")]
+    [Produces("application/json")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<TenantMemberDto>>> GetMembers(Guid tenantId)
+    {
+        return Ok(await membership.GetMembersAsync(tenantId));
     }
 }

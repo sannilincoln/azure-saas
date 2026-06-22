@@ -68,10 +68,13 @@ public class PermissionsService(
     {
         _logger.LogDebug("New Tenant creation was requested by {userId} for {tenantId}", userId, tenantId);
 
-        TenantPermission newTenantPermissions = new()
-        {
-            PermissionStr = TenantPermissionKind.Admin.ToString(),
-        };
+        // Bootstrap the creator as Super-Admin: this expands to the CRUD Admin permission (so they can
+        // administer the tenant + invite/assign roles via the API) plus the Role:Super-Admin tag the
+        // product UI reads back. Marketplace customers can't be granted Entra app roles in their own
+        // directory, so the owner role is seeded here as tenant data instead.
+        var newTenantPermissions = TenantRole.ToPermissionStrings(TenantRole.Bootstrap)
+            .Select(p => new TenantPermission { PermissionStr = p })
+            .ToArray();
 
         UserPermission newUserPermission = new()
         {
@@ -82,7 +85,7 @@ public class PermissionsService(
         {
             TenantId = tenantId,
             UserId = userId,
-            TenantPermissions = new TenantPermission[] { newTenantPermissions },
+            TenantPermissions = newTenantPermissions,
             UserPermissions = new UserPermission[] { newUserPermission }
         });
 
