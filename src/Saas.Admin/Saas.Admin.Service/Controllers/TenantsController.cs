@@ -13,6 +13,10 @@ using System.Security.Claims;
 
 namespace Saas.Admin.Service.Controllers;
 
+/// <summary>Result of an invite call: whether the invitation email reached the invitee (the invitation
+/// itself is always recorded; this only reflects email delivery so the UI can warn on failure).</summary>
+public record InviteResultDto(bool EmailDelivered);
+
 [Route("api/[controller]")]
 [Authorize]
 [ApiController]
@@ -22,6 +26,7 @@ public class TenantsController : ControllerBase
     private readonly IPermissionsServiceClient _permissionsServiceClient;
     private readonly IMarketplaceSeatService _seatService;
     private readonly ITenantMembershipClient _membershipClient;
+    private readonly IEmailSender _emailSender;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger _logger;
 
@@ -30,6 +35,7 @@ public class TenantsController : ControllerBase
         IPermissionsServiceClient permissionService,
         IMarketplaceSeatService seatService,
         ITenantMembershipClient membershipClient,
+        IEmailSender emailSender,
         IHttpContextAccessor httpContextAccessor,
         ILogger<TenantsController> logger)
     {
@@ -39,6 +45,21 @@ public class TenantsController : ControllerBase
         _permissionsServiceClient = permissionService;
         _seatService = seatService;
         _membershipClient = membershipClient;
+        _emailSender = emailSender;
+    }
+
+    /// <summary>Best-effort tenant display name for an email; falls back to a neutral label.</summary>
+    private async Task<string> TenantNameOrDefaultAsync(Guid tenantId)
+    {
+        try
+        {
+            return (await _tenantService.GetTenantAsync(tenantId))?.Name ?? "your organization";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not resolve tenant name for {TenantId}; using a neutral label.", tenantId);
+            return "your organization";
+        }
     }
 
     /// <summary>
@@ -461,7 +482,13 @@ public class TenantsController : ControllerBase
             userEmail,
             TenantRole.ToPermissionStrings(role));
 
-        return NoContent();
+        // Email the invitee (Flow 3). Best-effort: the invitation is already recorded and is never rolled
+        // back; we surface whether the email was delivered so the UI can warn "invited, but email failed".
+        var tenantName = await TenantNameOrDefaultAsync(tenantId);
+        var emailDelivered = await _emailSender.NotifyUserInvitedAsync(
+            new UserInvitedNotice(userEmail, role, tenantName, tenantId));
+
+        return Ok(new InviteResultDto(emailDelivered));
     }
 
     /// <summary>
@@ -487,6 +514,19 @@ public class TenantsController : ControllerBase
 
         await _permissionsServiceClient.AddUserPermissionsToTenantAsync(
             tenantId, userId, TenantRole.ToPermissionStrings(role));
+
+        // Notify the member their role changed (Flow 4). Best-effort: resolve their stored email; if it's
+        // not captured yet (member hasn't signed in) the sender simply skips. Never fail the role change.
+        try
+        {
+            var email = await _membershipClient.GetMemberEmailAsync(tenantId, userId);
+            var tenantName = await TenantNameOrDefaultAsync(tenantId);
+            await _emailSender.NotifyRoleChangedAsync(new RoleChangedNotice(email, role, tenantName));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Role-change email failed for user {UserId} on tenant {TenantId} (non-fatal).", userId, tenantId);
+        }
 
         return NoContent();
     }

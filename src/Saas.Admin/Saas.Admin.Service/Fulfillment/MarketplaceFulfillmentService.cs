@@ -12,7 +12,7 @@ public class MarketplaceFulfillmentService(
     IFulfillmentApiService fulfillmentApi,
     SaasKitContext marketplaceDb,
     TenantsContext tenantsDb,
-    IMarketplaceNotificationService notifications,
+    IEmailSender emailSender,
     IProductProvisioningService provisioning,
     IOptions<MarketplaceOptions> marketplaceOptions,
     ILogger<MarketplaceFulfillmentService> logger) : IMarketplaceFulfillmentService
@@ -185,10 +185,11 @@ public class MarketplaceFulfillmentService(
             logger.LogInformation("Provisioned + activated tenant {TenantId} (subscription {SubscriptionId}, db {DatabaseName}).",
                 tenant.Id, subscriptionId, databaseName);
 
-            // 4) Best-effort publisher notification — must never fail the (already committed) onboarding.
+            // 4) Best-effort emails — must never fail the (already committed) onboarding. The email sender
+            //    is itself best-effort, but guard the whole block too in case notice construction throws.
             try
             {
-                await notifications.NotifySubscriptionActivatedAsync(new SubscriptionActivatedNotice(
+                var notice = new SubscriptionActivatedNotice(
                     SubscriptionId: subscriptionId,
                     SubscriptionName: subscription.Name,
                     OfferId: subscription.AmpOfferId,
@@ -196,11 +197,14 @@ public class MarketplaceFulfillmentService(
                     Quantity: subscription.Ampquantity,
                     TenantName: tenant.Name,
                     TenantRoute: tenant.Route,
-                    CustomerEmail: tenant.CreatorEmail));
+                    CustomerEmail: tenant.CreatorEmail);
+
+                await emailSender.NotifySubscriptionActivatedAsync(notice, cancellationToken); // Flow 1: publisher alert
+                await emailSender.NotifyTenantWelcomeAsync(notice, cancellationToken);          // Flow 2: welcome the tenant
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Publisher notification failed for tenant {TenantId} (non-fatal).", tenant.Id);
+                logger.LogWarning(ex, "Activation emails failed for tenant {TenantId} (non-fatal).", tenant.Id);
             }
         }
         catch (Exception ex)

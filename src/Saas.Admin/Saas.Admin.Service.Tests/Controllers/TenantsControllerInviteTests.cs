@@ -21,12 +21,14 @@ public class TenantsControllerInviteTests
 {
     private static TenantsController BuildController(
         ITenantMembershipClient membership,
-        IPermissionsServiceClient permissions) =>
+        IPermissionsServiceClient permissions,
+        IEmailSender? emailSender = null) =>
         new(
             Substitute.For<ITenantService>(),
             permissions,
             Substitute.For<IMarketplaceSeatService>(),
             membership,
+            emailSender ?? Substitute.For<IEmailSender>(),
             Substitute.For<IHttpContextAccessor>(),
             NullLogger<TenantsController>.Instance);
 
@@ -35,15 +37,20 @@ public class TenantsControllerInviteTests
     {
         var membership = Substitute.For<ITenantMembershipClient>();
         var permissions = Substitute.For<IPermissionsServiceClient>();
-        var controller = BuildController(membership, permissions);
+        var emailSender = Substitute.For<IEmailSender>();
+        var controller = BuildController(membership, permissions, emailSender);
 
         var tenantId = Guid.NewGuid();
 
         var result = await controller.InviteUserToTenant(tenantId, "bursar@school.edu");
 
-        Assert.IsType<NoContentResult>(result);
+        // Invite now returns the email-delivery result (so the UI can warn on failure) rather than 204.
+        Assert.IsType<OkObjectResult>(result);
         await membership.Received(1).CreateInvitationAsync(
             tenantId, "bursar@school.edu", Arg.Any<IEnumerable<string>>());
+        // The invitee is emailed (Flow 3).
+        await emailSender.Received(1).NotifyUserInvitedAsync(
+            Arg.Is<UserInvitedNotice>(n => n.Email == "bursar@school.edu"), Arg.Any<System.Threading.CancellationToken>());
         // The Graph-based email lookup must no longer be used under Workforce multitenant.
         await permissions.DidNotReceive().AddUserPermissionsToTenantByEmailAsync(
             Arg.Any<Guid?>(), Arg.Any<string>(), Arg.Any<IEnumerable<string>>());
@@ -58,7 +65,7 @@ public class TenantsControllerInviteTests
 
         var result = await controller.InviteUserToTenant(tenantId, "bursar@school.edu", TenantRole.Bursar);
 
-        Assert.IsType<NoContentResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         await membership.Received(1).CreateInvitationAsync(
             tenantId,
             "bursar@school.edu",
@@ -146,6 +153,7 @@ public class TenantsControllerInviteTests
             Substitute.For<IPermissionsServiceClient>(),
             Substitute.For<IMarketplaceSeatService>(),
             membership,
+            Substitute.For<IEmailSender>(),
             Substitute.For<IHttpContextAccessor>(),
             NullLogger<TenantsController>.Instance);
 

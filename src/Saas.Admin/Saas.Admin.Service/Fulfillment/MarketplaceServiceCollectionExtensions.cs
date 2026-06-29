@@ -58,10 +58,32 @@ public static class MarketplaceServiceCollectionExtensions
         services.AddScoped<IFulfillmentApiService, FulfillmentApiService>();
         services.AddScoped<IMarketplaceFulfillmentService, MarketplaceFulfillmentService>();
 
-        // Optional publisher email on activation (a tenant signing up). The enabled flag + from/to
-        // are publisher-editable (settings store); SMTP transport stays in config/Key Vault.
+        // Transactional email (publisher alert + customer welcome/invite/role-change). The master +
+        // per-flow toggles and the alert recipients are publisher-editable (settings store); branding
+        // is config; the sender is Microsoft Graph as the shared mailbox, on the App Service managed
+        // identity (Mail.Send app role). Absent a shared mailbox, a no-op transport keeps the feature off.
+        services.Configure<NotificationBrandingOptions>(configuration.GetSection(NotificationBrandingOptions.SectionName));
         services.AddScoped<IMarketplaceNotificationSettingsStore, MarketplaceNotificationSettingsStore>();
-        services.AddScoped<IMarketplaceNotificationService, SmtpMarketplaceNotificationService>();
+        services.AddScoped<IEmailSender, GraphEmailSender>();
+
+        var sharedMailbox = configuration["Notifications:SharedMailbox"];
+        if (!string.IsNullOrWhiteSpace(sharedMailbox))
+        {
+            var uamiClientId = configuration["UserAssignedManagedIdentityClientId"];
+            services.AddSingleton(_ =>
+            {
+                Azure.Core.TokenCredential credential = string.IsNullOrWhiteSpace(uamiClientId)
+                    ? new Azure.Identity.DefaultAzureCredential()
+                    : new Azure.Identity.ManagedIdentityCredential(uamiClientId);
+                return new Microsoft.Graph.GraphServiceClient(credential, ["https://graph.microsoft.com/.default"]);
+            });
+            services.AddScoped<IGraphMailClient>(sp =>
+                new GraphMailClient(sp.GetRequiredService<Microsoft.Graph.GraphServiceClient>(), sharedMailbox));
+        }
+        else
+        {
+            services.AddScoped<IGraphMailClient, NoOpGraphMailClient>();
+        }
 
         // Real product provisioning (Phase 1.3): when a product provisioning endpoint is configured,
         // register the HTTP provisioner (overriding the Noop in Program.cs). It POSTs to the product's

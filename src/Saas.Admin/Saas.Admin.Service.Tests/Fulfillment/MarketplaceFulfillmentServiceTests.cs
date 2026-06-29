@@ -19,7 +19,7 @@ public class MarketplaceFulfillmentServiceTests
         Marketplace.SaaS.Accelerator.DataAccess.Context.SaasKitContext marketplace,
         Saas.Admin.Service.Data.TenantsContext tenants,
         IProductProvisioningService? provisioning = null) =>
-        new(fulfillment, marketplace, tenants, Substitute.For<IMarketplaceNotificationService>(),
+        new(fulfillment, marketplace, tenants, Substitute.For<IEmailSender>(),
             provisioning ?? Substitute.For<IProductProvisioningService>(),
             Options.Create(options), NullLogger<MarketplaceFulfillmentService>.Instance);
 

@@ -5,7 +5,7 @@
 }
 
 <h1>Notification Settings</h1>
-<p class="text-muted">Who gets emailed when a customer signs up. SMTP server settings are managed in configuration.</p>
+<p class="text-muted">Which emails the platform sends, and who receives the sign-up alert. The sending mailbox is managed in configuration.</p>
 
 @if (TempData["SettingsSaved"] is true)
 {
@@ -18,24 +18,41 @@
     <div class="form-check mb-3">
         <input class="form-check-input" type="checkbox" name="Enabled" value="true" id="Enabled" @(Model.Enabled ? "checked" : "") />
         <input type="hidden" name="Enabled" value="false" />
-        <label class="form-check-label" for="Enabled">Send notifications on new sign-up</label>
+        <label class="form-check-label" for="Enabled"><strong>Enable email notifications</strong> (master switch)</label>
     </div>
 
-    <div class="mb-3">
-        <label class="form-label" for="FromEmail">From address</label>
-        <input class="form-control" type="email" name="FromEmail" id="FromEmail" value="@Model.FromEmail" placeholder="no-reply@yourdomain.com" />
-    </div>
+    <fieldset class="mb-3 ps-3 border-start">
+        <legend class="form-label">Send which emails</legend>
+
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="SignupAlert" value="true" id="SignupAlert" @(Model.SignupAlert ? "checked" : "") />
+            <input type="hidden" name="SignupAlert" value="false" />
+            <label class="form-check-label" for="SignupAlert">Alert us when a new tenant signs up</label>
+        </div>
+
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="Welcome" value="true" id="Welcome" @(Model.Welcome ? "checked" : "") />
+            <input type="hidden" name="Welcome" value="false" />
+            <label class="form-check-label" for="Welcome">Welcome the new tenant by email</label>
+        </div>
+
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="Invite" value="true" id="Invite" @(Model.Invite ? "checked" : "") />
+            <input type="hidden" name="Invite" value="false" />
+            <label class="form-check-label" for="Invite">Email invited users</label>
+        </div>
+
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="RoleChange" value="true" id="RoleChange" @(Model.RoleChange ? "checked" : "") />
+            <input type="hidden" name="RoleChange" value="false" />
+            <label class="form-check-label" for="RoleChange">Notify members when their role changes</label>
+        </div>
+    </fieldset>
 
     <div class="mb-3">
-        <label class="form-label" for="ToEmails">Recipient address(es)</label>
+        <label class="form-label" for="ToEmails">Sign-up alert recipient(s)</label>
         <input class="form-control" type="text" name="ToEmails" id="ToEmails" value="@Model.ToEmails" placeholder="ops@yourdomain.com; sales@yourdomain.com" />
-        <div class="form-text">Separate multiple addresses with a semicolon or comma.</div>
-    </div>
-
-    <div class="form-check mb-3">
-        <input class="form-check-input" type="checkbox" name="CopyToCustomer" value="true" id="CopyToCustomer" @(Model.CopyToCustomer ? "checked" : "") />
-        <input type="hidden" name="CopyToCustomer" value="false" />
-        <label class="form-check-label" for="CopyToCustomer">Also CC the customer who signed up</label>
+        <div class="form-text">Where the "new tenant signed up" alert is sent. Separate multiple addresses with a semicolon or comma.</div>
     </div>
 
     <button type="submit" class="btn btn-primary">Save</button>

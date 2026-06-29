@@ -631,6 +631,87 @@ plus a client secret for the service-to-service flow.
 
 ---
 
+## Phase 8 — Email notifications & JIT bind identity capture (designed + built 2026-06-29)
+
+> **STATUS: code-complete on AzureSaas `main` working tree (uncommitted), 55 tests green.** All 4 flows
+> (`IEmailSender`/`GraphEmailSender`), Graph transport (`GraphMailClient` on the MI, as
+> `edulynksupport@lagetronix.com`), per-flow toggle settings + Publisher console, `GetMemberEmailAsync`,
+> branding, and the test-send endpoint are built and wired (fulfillment Flows 1+2; `TenantsController`
+> invite Flow 3 → `Ok(InviteResultDto)`, role Flow 4). SMTP service deleted. **MI `Mail.Send` grant DONE.**
+> **Remaining to go live:** (1) deploy admin-api; (2) set app settings `Notifications__SharedMailbox` =
+> `edulynksupport@lagetronix.com`, `Notifications__Branding__ProductName`/`__AppBaseUrl`, and turn on the
+> per-flow toggles in Publisher→Settings; (3) verify with the test-send button; (4) **cross-repo follow-up**:
+> Connector BFF `TeamAdminClient.InviteAsync` + FE Team page to read `InviteResultDto.emailDelivered` and
+> warn on failure (the Admin side already returns it; BFF/FE just ignore the body until updated).
+
+
+Supersedes the SMTP design in [[marketplace-email-notifications]] (built but **dead under Security
+Defaults** — SMTP AUTH + app passwords are both blocked). Expands the publisher-only alert into four
+flows sent from one **shared mailbox** via **Microsoft Graph `sendMail`**.
+
+**Transport & identity (decided):**
+- Graph `sendMail`, **app-only** — rip out `SmtpMarketplaceNotificationService` / `System.Net.Mail`.
+- Sender = a **shared mailbox** (`notifications@lagetronix.com` — *UPN pending from user*); team added
+  Full-Access so they read inbound alerts.
+- Auth = the **existing user-assigned managed identity** granted Graph `Mail.Send` (no secrets/certs).
+  One-time admin action (Graph PowerShell, NOT Exchange):
+  `New-MgServicePrincipalAppRoleAssignment` granting `Mail.Send` to the MI SP — *needs a Graph admin*.
+- **`Mail.Send` stays tenant-wide — ACCEPTED RISK.** No Exchange admin to set an Application Access
+  Policy (or RBAC for Applications), so the MI can technically send as any mailbox in the tenant.
+
+**Architecture (decided):** one general **`IEmailSender`** (Graph, MI) in the **Admin API**, replacing
+`IMarketplaceNotificationService`. Three hook points, all already in the Admin API:
+- **Flow 1** publisher signup alert + **Flow 2** welcome new tenant → fulfillment activation path
+  (`MarketplaceFulfillmentService`). Recipients: shared mailbox; `tenant.CreatorEmail`.
+- **Flow 3** invite → `TenantsController.InviteUserToTenant` (has `userEmail`).
+- **Flow 4** role change → `TenantsController.AssignTenantRole`; recipient resolved server-side via a new
+  `GetMemberAsync(tenantId, userId)` on `ITenantMembershipClient` → Permissions API.
+- Connector BFF + Permissions API keep calling the Admin API; no Graph clients scattered.
+
+**Failure handling (decided):** Flows 1/2/4 pure best-effort (swallow + log, never break the op). **Flow
+3 best-effort + surfaced** — invitation never rolled back, but a mail failure returns a soft signal
+through BFF→FE so the Team page can warn "invited, but email failed."
+
+**Config / console (decided):** keep the editable Publisher console + DB store, reshaped to **master
+Enabled + per-flow toggles** (signup-alert / welcome / invite / role-change); **From read-only** (shared
+mailbox from config); publisher-alert **To** editable (default = shared mailbox); **drop
+`CopyToCustomer`**. **Reply-To = the shared mailbox.**
+
+**Content (decided):** **inline HTML builders** per flow (no templating engine). **Config-driven
+branding** (`Notifications:Branding`: product name, logo URL, support email) + a **parameterized FE base
+URL** for the "sign in here" link. English-only.
+
+**Validation (decided):** add a **"Send test email"** button to the Publisher console — sends each
+template via the Graph path to the shared mailbox / a typed address. No purchases, no customer risk.
+
+### Prerequisite — JIT bind identity capture ✅ ALREADY IMPLEMENTED (discovered 2026-06-29)
+Option A is **already built, committed, and green** — not a build task. `PermissionResolver.EnsureBoundAsync`
+(Connector `Lagetronix.Connector.Data/Platform/PermissionResolver.cs`) POSTs Permissions `BindMember`
+with `oid`/`email`/`displayName` from the **validated token** before reading permissions; idempotent,
+cached per (tenant,user) ~5min, fail-open, skips when the token has no email. Commits `386c600`
+(2026-06-23 15:04) + `4c04344` (16:35, harden v1 `upn`/`unique_name`). 5 `PermissionResolverTests` green.
+**On `saas-kit-integration`, NOT on `main`.** The Team page triggers it via
+`TeamController.IsTeamAdminAsync → GetPermissionsAsync`.
+
+So the **Team-page Name/Email bug is NOT missing code** — it's resolved on-branch. The FE side is also
+done: tip `c521012` rewrote the Team page to use the reusable `AppDataTable` (the raw-`<table>` +
+null name/email seen earlier was stale local state, pre-pull). **Remaining to close the bug in the
+running env:** (1) confirm/redeploy the slot with the bind commits (last in-session slot deploy
+~2026-06-23 09:01Z predates `386c600`/`4c04344` at 15:04/16:35); (2) confirm the deployed **Permissions
+API** has the `BindMember` endpoint + `TenantMember.Email/DisplayName` columns (Phase 1.5 `EnsureCreated`
+note — an existing prod DB needs the one-time `CREATE TABLE`); (3) port to `main` for prod.
+
+**Delivery order:** ① verify/deploy the (already-built) bind capture → ② email flows + test-send (Admin API).
+
+**Verified provisioning facts (2026-06-29):**
+- Shared mailbox = **`edulynksupport@lagetronix.com`** (created) → goes to config `Notifications:SharedMailbox` (the From/Reply-To).
+- Admin API identity = user-assigned MI **`user-assign-id-asdk-test-x16w`**, clientId `8ad747fd-51cc-4b77-85ae-f05fa0bfd135`, **SP objectId `10e0aae7-aeb3-48d2-b97d-8ccb2a045503`** (the grantee).
+- Graph SP objectId in tenant = `606cabd6-ee87-4748-b1dd-8077d6850f04`; `Mail.Send` app role id = `b633e1c5-b582-4048-a93e-9f11b44c7e96`.
+- **Grant command (a Global Admin must run; `az rest` POST appRoleAssignments to the MI SP).** ⚠ `ssunday@lagetronix.com` is only **Application Administrator** — NOT enough to grant a *Microsoft Graph* app role (needs Global Admin / Privileged Role Admin). Global Admins: okolo / femi / oadesanya / payeyemi / O.Adesanya @lagetronix.com. **STATUS: grant pending an admin.** Until it lands, `sendMail` returns 403 (test-send is how we verify).
+- ⚠ Windows-PowerShell gotcha: `az rest --body '{json}'` fails with "Unable to read JSON request payload" (cmd.exe re-parses the quotes) — use Azure Cloud Shell bash, or `--body "@file.json"`.
+
+---
+
 ## Cross-cutting risks & open issues
 
 1. **Cross-tenant Graph (resolved, see 1.5):** invite-by-email and member listing currently need the

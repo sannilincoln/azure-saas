@@ -17,6 +17,8 @@ namespace Saas.Admin.Service.Controllers;
 [Route("api/marketplace/notifications/settings")]
 public class MarketplaceNotificationSettingsController(
     IMarketplaceNotificationSettingsStore store,
+    IGraphMailClient mailClient,
+    IOptions<NotificationBrandingOptions> branding,
     IOptions<MarketplaceOptions> marketplaceOptions,
     ILogger<MarketplaceNotificationSettingsController> logger) : ControllerBase
 {
@@ -29,7 +31,8 @@ public class MarketplaceNotificationSettingsController(
         }
 
         var s = await store.GetAsync();
-        return Ok(new NotificationSettingsDto(s.Enabled, s.FromEmail, s.ToEmails, s.CopyToCustomer));
+        return Ok(new NotificationSettingsDto(
+            s.Enabled, s.ToEmails, s.SignupAlert, s.Welcome, s.Invite, s.RoleChange));
     }
 
     [HttpPut]
@@ -41,8 +44,44 @@ public class MarketplaceNotificationSettingsController(
         }
 
         await store.SaveAsync(new MarketplaceNotificationSettings(
-            request.Enabled, request.FromEmail, request.ToEmails, request.CopyToCustomer));
+            Enabled: request.Enabled, FromEmail: null, ToEmails: request.ToEmails, CopyToCustomer: false,
+            SignupAlert: request.SignupAlert, Welcome: request.Welcome,
+            Invite: request.Invite, RoleChange: request.RoleChange));
         return NoContent();
+    }
+
+    /// <summary>
+    /// Send a one-off test email to confirm the Graph transport (managed identity + shared mailbox) is
+    /// working — independent of the toggles, so the publisher can validate setup before turning flows on.
+    /// Surfaces the transport error verbatim (e.g. a Graph 403) so misconfiguration is visible.
+    /// </summary>
+    [HttpPost("test")]
+    public async Task<IActionResult> SendTest([FromQuery] string to)
+    {
+        if (!IsPublisher())
+        {
+            return Forbid();
+        }
+
+        if (string.IsNullOrWhiteSpace(to))
+        {
+            return BadRequest("A 'to' address is required.");
+        }
+
+        var product = branding.Value.ProductName;
+        try
+        {
+            await mailClient.SendAsync(new EmailMessage(
+                To: new[] { to },
+                Subject: $"Test email from {product}",
+                HtmlBody: $"<p>This is a test email from {product}. If you received it, Graph <code>sendMail</code> is working.</p>"));
+            return Ok($"Test email sent to {to}.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Test email to {Recipient} failed.", to);
+            return StatusCode(StatusCodes.Status502BadGateway, $"Send failed: {ex.Message}");
+        }
     }
 
     private Guid? CallerTenantId => Guid.TryParse(User.GetTenantId(), out var tid) ? tid : null;
@@ -59,4 +98,10 @@ public class MarketplaceNotificationSettingsController(
     }
 }
 
-public record NotificationSettingsDto(bool Enabled, string? FromEmail, string? ToEmails, bool CopyToCustomer);
+public record NotificationSettingsDto(
+    bool Enabled,
+    string? ToEmails,
+    bool SignupAlert,
+    bool Welcome,
+    bool Invite,
+    bool RoleChange);

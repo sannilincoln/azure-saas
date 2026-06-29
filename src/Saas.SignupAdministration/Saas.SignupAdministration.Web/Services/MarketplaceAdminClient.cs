@@ -28,7 +28,13 @@ public interface IMarketplaceAdminClient
     Task UpdateNotificationSettingsAsync(NotificationSettings settings);
 }
 
-public record NotificationSettings(bool Enabled, string? FromEmail, string? ToEmails, bool CopyToCustomer);
+public record NotificationSettings(
+    bool Enabled,
+    string? ToEmails,
+    bool SignupAlert,
+    bool Welcome,
+    bool Invite,
+    bool RoleChange);
 
 public record ResolvedSubscription(
     Guid SubscriptionId,
@@ -83,7 +89,8 @@ public class MarketplaceAdminClient(
         response.EnsureSuccessStatusCode();
 
         return await response.Content.ReadFromJsonAsync<NotificationSettings>()
-            ?? new NotificationSettings(false, null, null, false);
+            ?? new NotificationSettings(Enabled: false, ToEmails: null,
+                SignupAlert: false, Welcome: false, Invite: false, RoleChange: false);
     }
 
     public async Task UpdateNotificationSettingsAsync(NotificationSettings settings)
