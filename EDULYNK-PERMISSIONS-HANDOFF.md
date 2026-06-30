@@ -40,6 +40,31 @@ shares that tid), `aud = api://6a3e6083…`, `scp = access_as_user`. Token is va
 
 ---
 
+## ⚠️ UPDATE 2026-06-30 (RESOLVED) — it was the SLOT, not production
+
+Live verification corrected the picture below. The Educ8e API integration build does **not** run on the
+production app — **pipeline `122` ("Educ8e Connector saas-kit-integration") deploys to a deployment SLOT**:
+
+- **Slot:** `educ8e-connector-app-saas-kit-integration`
+  (host `educ8e-connector-app-educ8e-connector-app-saas-kit-integrat.azurewebsites.net`) — runs `0f4a13e`,
+  has all integration routes (`/api/me/permissions`, `/api/me/team/*`, `/api/tenant-settings`). **This is
+  what the FE targets.**
+- **Production** `educ8e-connector-app.azurewebsites.net` — runs the **legacy** pre-integration build
+  (no `/me/*` routes; `/api/me/permissions` → 404).
+
+The 500 was the **slot** running the new `SaasKit:*` code but having only the old `Edulynk__*` app
+settings → `SaasKitTokenProvider` threw at startup. **Fix applied to the SLOT** (`--slot
+educ8e-connector-app-saas-kit-integration`): added `SaasKit__ServiceClientSecret` (= the slot's
+`AzureAd__ClientSecret`) and `SaasKit__PermissionsApiKey` (= the slot's `Edulynk__PermissionsApiKey`).
+After the restart, the slot's `/api/me/permissions` went **500 → 401** (unauth) = healthy. The same two
+settings were also (harmlessly) set on production, which still runs legacy code and ignores them.
+
+**So the config fix below is DONE on the slot.** Remaining: confirm the data facts (#2/#3) with a real
+token now that the 500 is gone, and decide when to swap the slot → production (or point the FE at prod
+once prod carries the integration build). The rest of this doc is retained for context.
+
+---
+
 ## Root cause #1 — the 500 (ALREADY FIXED IN CODE; needs deploy)
 
 The restructure replaced the old **local** tenant lookup with a hard **live S2S call**
