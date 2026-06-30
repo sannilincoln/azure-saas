@@ -638,11 +638,14 @@ plus a client secret for the service-to-service flow.
 > `edulynksupport@lagetronix.com`), per-flow toggle settings + Publisher console, `GetMemberEmailAsync`,
 > branding, and the test-send endpoint are built and wired (fulfillment Flows 1+2; `TenantsController`
 > invite Flow 3 → `Ok(InviteResultDto)`, role Flow 4). SMTP service deleted. **MI `Mail.Send` grant DONE.**
-> **Remaining to go live:** (1) deploy admin-api; (2) set app settings `Notifications__SharedMailbox` =
-> `edulynksupport@lagetronix.com`, `Notifications__Branding__ProductName`/`__AppBaseUrl`, and turn on the
-> per-flow toggles in Publisher→Settings; (3) verify with the test-send button; (4) **cross-repo follow-up**:
-> Connector BFF `TeamAdminClient.InviteAsync` + FE Team page to read `InviteResultDto.emailDelivered` and
-> warn on failure (the Admin side already returns it; BFF/FE just ignore the body until updated).
+> **SHIPPED 2026-06-29** — committed+pushed all three repos (AzureSaas `567f3770`→main; BFF
+> `bed4d27`→devops/saas-kit-integration; FE `545cda7`→origin/saas-kit-integration); pipelines deploying.
+> App settings set on admin-api: `Notifications__SharedMailbox`=`edulynksupport@lagetronix.com`,
+> `Notifications__Branding__ProductName`=`Edulynk`, `__AppBaseUrl`=`https://gray-island-0b3b99f0f.7.azurestaticapps.net`.
+> **Cross-repo invite-surfacing DONE:** BFF `TeamAdminClient.InviteAsync`→`Task<bool>` (empty-body→true
+> back-compat) + `TeamController` returns it; FE `inviteResultToast` warns only on explicit false, wired
+> into the invite dialog. **Remaining: flip the per-flow toggles ON in Publisher→Settings, then verify
+> with the test-send button once the admin-api pipeline finishes.**
 
 
 Supersedes the SMTP design in [[marketplace-email-notifications]] (built but **dead under Security
