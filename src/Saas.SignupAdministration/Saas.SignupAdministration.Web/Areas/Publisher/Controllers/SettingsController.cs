@@ -29,4 +29,21 @@ public class SettingsController(IMarketplaceAdminClient marketplaceClient) : Con
         TempData["SettingsSaved"] = true;
         return RedirectToAction(nameof(Index));
     }
+
+    [HttpPost("TestEmail")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> TestEmail(string to)
+    {
+        if (string.IsNullOrWhiteSpace(to))
+        {
+            TempData["TestEmailOk"] = false;
+            TempData["TestEmailMessage"] = "Enter an address to send the test email to.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        var (ok, message) = await marketplaceClient.SendTestEmailAsync(to);
+        TempData["TestEmailOk"] = ok;
+        TempData["TestEmailMessage"] = message;
+        return RedirectToAction(nameof(Index));
+    }
 }

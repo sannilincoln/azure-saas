@@ -26,6 +26,12 @@ public interface IMarketplaceAdminClient
 
     /// <summary>Update the publisher-editable notification settings (publisher console).</summary>
     Task UpdateNotificationSettingsAsync(NotificationSettings settings);
+
+    /// <summary>
+    /// Send a one-off test email via the Admin API's Graph transport. Returns the API's message
+    /// verbatim (success text or the surfaced transport error) so the console can show it.
+    /// </summary>
+    Task<(bool Ok, string Message)> SendTestEmailAsync(string to);
 }
 
 public record NotificationSettings(
@@ -102,6 +108,18 @@ public class MarketplaceAdminClient(
 
         using var response = await httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<(bool Ok, string Message)> SendTestEmailAsync(string to)
+    {
+        using var request = await CreateHttpRequestMessageAsync(CancellationToken.None);
+        request.Method = HttpMethod.Post;
+        request.RequestUri = new Uri(
+            $"api/marketplace/notifications/settings/test?to={Uri.EscapeDataString(to)}", UriKind.Relative);
+
+        using var response = await httpClient.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+        return (response.IsSuccessStatusCode, body);
     }
 
     private async Task<IReadOnlyList<SubscriptionInfo>> GetListAsync(string relativeUri)

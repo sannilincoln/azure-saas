@@ -12,6 +12,11 @@
     <div class="alert alert-success">Settings saved.</div>
 }
 
+@if (TempData["TestEmailMessage"] is string testEmailMessage)
+{
+    <div class="alert @(TempData["TestEmailOk"] is true ? "alert-success" : "alert-danger")">@testEmailMessage</div>
+}
+
 <form asp-area="Publisher" asp-controller="Settings" asp-action="Index" method="post" style="max-width:640px">
     @Html.AntiForgeryToken()
 
@@ -57,4 +62,16 @@
 
     <button type="submit" class="btn btn-primary">Save</button>
     <a class="btn btn-outline-secondary" asp-area="Publisher" asp-controller="Subscriptions" asp-action="Index">Back to subscriptions</a>
+</form>
+
+<hr class="my-4" style="max-width:640px" />
+
+<form asp-area="Publisher" asp-controller="Settings" asp-action="TestEmail" method="post" style="max-width:640px">
+    @Html.AntiForgeryToken()
+    <label class="form-label" for="TestEmailTo"><strong>Send a test email</strong></label>
+    <div class="input-group">
+        <input class="form-control" type="email" name="to" id="TestEmailTo" placeholder="you@yourdomain.com" required />
+        <button type="submit" class="btn btn-outline-primary">Send test email</button>
+    </div>
+    <div class="form-text">Sends a one-off email via the configured mailbox to confirm the Graph transport is working. Independent of the toggles above.</div>
 </form>
